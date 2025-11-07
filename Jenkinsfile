@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         GITHUB_REPO = 'https://github.com/authnull0/mfa-service.git'
-        GITHUB_BRANCH = 'dev-authnull'
+        GITHUB_BRANCH = 'development-test'
         DOCKER_REGISTRY = 'docker-repo.authnull.com'
         DOCKER_REGISTRY_CREDENTIALS = credentials('authnull-repo')
         DOCKER_IMAGE = 'docker-repo.authnull.com/mfa-service:latest'
