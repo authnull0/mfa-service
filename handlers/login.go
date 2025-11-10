@@ -966,3 +966,99 @@ func (h *LoginHandler) BackToLogin(c *gin.Context) {
 	// log.Default().Println("Redirected to SAML login page")
 	// c.JSON(http.StatusOK, gin.H{"message": "Redirected to SAML login page"})
 }
+
+func GetSession(c *gin.Context) {
+	// Retrieve the Authorization header from the request
+	ID := c.Request.Header.Get("Authorization")
+
+	log.Default().Println("ID:", ID)
+
+	//get session id from cookie set is same domain clinet.did.kloudlearn.com in name of session
+
+	CookieData, err := c.Cookie("session")
+
+	log.Default().Println("Cookie:", CookieData)
+
+	var getSessionResponse *dto.GetSessionResponse
+
+	session2 := &saml.Session{}
+
+	err = Server.Store.Get(fmt.Sprintf("/sessions/%s", ID), &session2)
+	if err != nil {
+		log.Default().Println("Error:", err)
+		getSessionResponse = &dto.GetSessionResponse{
+			Code:       500,
+			Status:     "error at gettting session",
+			Validation: false,
+			Message:    "Error",
+			User:       "",
+		}
+		c.JSON(http.StatusOK, getSessionResponse)
+		return
+	}
+	if err := json.NewEncoder(c.Writer).Encode(session2); err != nil {
+		log.Default().Println("Error:", err)
+		getSessionResponse = &dto.GetSessionResponse{
+			Code:       500,
+			Status:     "error while encoding",
+			Validation: false,
+			Message:    "Error",
+			User:       "",
+		}
+		c.JSON(http.StatusOK, getSessionResponse)
+		return
+	}
+
+	//log.Default().Println("GET Session:", session2)
+
+	if saml.TimeNow().After(session2.ExpireTime) {
+		getSessionResponse = &dto.GetSessionResponse{
+			Code:       500,
+			Status:     "error session expired",
+			Validation: false,
+			Message:    "Error",
+			User:       "",
+		}
+		c.JSON(http.StatusOK, getSessionResponse)
+		return
+	}
+
+	session2.ExpireTime = saml.TimeNow().Add(sessionMaxAge)
+
+	err = Server.Store.Put(fmt.Sprintf("/sessions/%s", ID), &session2)
+	if err != nil {
+		getSessionResponse = &dto.GetSessionResponse{
+			Code:       500,
+			Status:     "error at updating session",
+			Validation: false,
+			Message:    "Error",
+			User:       "",
+		}
+		c.JSON(http.StatusOK, getSessionResponse)
+		return
+	}
+	err = Server.Store.Get(fmt.Sprintf("/sessions/%s", ID), &session2)
+	if err != nil {
+		log.Default().Println("Error:", err)
+		getSessionResponse = &dto.GetSessionResponse{
+			Code:       500,
+			Status:     "error at gettting session",
+			Validation: false,
+			Message:    "Error",
+			User:       "",
+		}
+		c.JSON(http.StatusOK, getSessionResponse)
+		return
+	}
+
+	log.Default().Println("GET Session:", session2)
+	getSessionResponse = &dto.GetSessionResponse{
+		Code:       200,
+		Status:     "ok",
+		Validation: true,
+		Message:    "Success",
+		User:       session2.NameID,
+		UserRole:   session2.Groups[0],
+	}
+	c.JSON(http.StatusOK, getSessionResponse)
+}
