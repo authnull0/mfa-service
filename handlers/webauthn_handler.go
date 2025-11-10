@@ -957,6 +957,7 @@ func (h *WebAuthnHandler) GetMFAStatus(c *gin.Context) {
 }
 
 func (h *WebAuthnHandler) VerifyUser(c *gin.Context) {
+	log.Default().Println("Verifying user...")
 	var req dto.VerifyUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
