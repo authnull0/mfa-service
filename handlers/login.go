@@ -1129,7 +1129,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 	//make a call to the sso mfa endpoint
 
 	//url := os.Getenv("DO_AUTHNV4")
-	url := "https://prod.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
+	url := "https://dev.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
 
 	log.Default().Println("url:", url)
 
