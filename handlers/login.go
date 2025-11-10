@@ -1146,7 +1146,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 	payloadBytes, err := json.Marshal(payload)
 
 	if err != nil {
-		log.Default().Println("Error:", err)
+		log.Default().Println("Marshal Error:", err)
 		ssoMfaResponse.Code = 500
 		ssoMfaResponse.Message = "Error"
 		ssoMfaResponse.Status = "error"
@@ -1164,7 +1164,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 	req, err := http.NewRequest("POST", url, strings.NewReader(string(payloadBytes)))
 
 	if err != nil {
-		log.Default().Println("Error:", err)
+		log.Default().Println("Create Request Error:", err)
 		ssoMfaResponse.Code = 500
 		ssoMfaResponse.Message = "Error"
 		ssoMfaResponse.Status = "error"
@@ -1180,7 +1180,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 	resp, err := client.Do(req)
 
 	if err != nil {
-		log.Default().Println("Error:", err)
+		log.Default().Println("Client Error:", err)
 		ssoMfaResponse.Code = 500
 		ssoMfaResponse.Message = "Error"
 		ssoMfaResponse.Status = "error"
@@ -1197,7 +1197,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 
 	if resp.StatusCode != http.StatusOK {
 
-		log.Default().Println("Error:", err)
+		log.Default().Println("Response code Error:", err)
 		ssoMfaResponse.Code = 500
 		ssoMfaResponse.Message = "Error"
 		ssoMfaResponse.Status = "error"
@@ -1212,7 +1212,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 
 	if err != nil {
 
-		log.Default().Println("Error:", err)
+		log.Default().Println("Read data Error:", err)
 		ssoMfaResponse.Code = 500
 		ssoMfaResponse.Message = "Error"
 		ssoMfaResponse.Status = "error"
