@@ -45,3 +45,26 @@ type BackToSamlLoginResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
 }
+type SsoMfaRequest struct {
+	Email     string `json:"email" validate:"required,email"`
+	Token     string `json:"token" validate:"required"`
+	Url       string `json:"url" validate:"required"`
+	RequestID string `json:"requestId"`
+}
+
+type SsoMfaResponse struct {
+	Code       int    `json:"code"`
+	Status     string `json:"status"`
+	Message    string `json:"message"`
+	FirstLogin string `json:"first_login"`
+	Data       bool   `json:"data"`
+}
+type DoAuthnResponse struct {
+	IsValid   bool   `json:"isValid"`
+	Message   string `json:"message"`
+	Status    string `json:"status"`
+	Code      int    `json:"code"`
+	RequestID string `json:"requestId"`
+	SsoUrl    string `json:"ssoUrl"`
+	Stage     int    `json:"stage"`
+}

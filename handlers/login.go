@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -965,4 +966,324 @@ func (h *LoginHandler) BackToLogin(c *gin.Context) {
 	// utils.SamlHandler(c)
 	// log.Default().Println("Redirected to SAML login page")
 	// c.JSON(http.StatusOK, gin.H{"message": "Redirected to SAML login page"})
+}
+
+func getsession(sessionID string) (bool, string, string, error) {
+	// Create a new request using http
+
+	var resp *dto.GetSessionResponse
+
+	session2 := &saml.Session{}
+
+	err := Server.Store.Get(fmt.Sprintf("/sessions/%s", sessionID), &session2)
+	if err != nil {
+		log.Default().Println("Error:", err)
+		resp = &dto.GetSessionResponse{
+			Code:       500,
+			Status:     "error",
+			Validation: false,
+			Message:    "Error",
+			User:       "",
+		}
+		return false, "", "", nil
+
+	}
+
+	if saml.TimeNow().After(session2.ExpireTime) {
+		resp = &dto.GetSessionResponse{
+			Code:       500,
+			Status:     "error",
+			Validation: false,
+			Message:    "Error",
+			User:       "",
+		}
+		return false, "", "", nil
+	}
+
+	session2.ExpireTime = saml.TimeNow().Add(sessionMaxAge)
+
+	err = Server.Store.Put(fmt.Sprintf("/sessions/%s", sessionID), &session2)
+	if err != nil {
+		resp = &dto.GetSessionResponse{
+			Code:       500,
+			Status:     "error",
+			Validation: false,
+			Message:    "Error",
+			User:       "",
+		}
+		return false, "", "", nil
+	}
+
+	err = Server.Store.Get(fmt.Sprintf("/sessions/%s", sessionID), &session2)
+	if err != nil {
+		log.Default().Println("Error:", err)
+		resp = &dto.GetSessionResponse{
+			Code:       500,
+			Status:     "error",
+			Validation: false,
+			Message:    "Error",
+			User:       "",
+		}
+		return false, "", "", nil
+	}
+
+	log.Default().Println("GET Session:", session2)
+
+	resp = &dto.GetSessionResponse{
+		Code:       200,
+		Status:     "ok",
+		Validation: true,
+		Message:    "Success",
+		User:       session2.NameID,
+	}
+
+	log.Default().Println("resp:", resp)
+
+	return true, session2.NameID, session2.Groups[0], nil
+
+}
+
+func (h *LoginHandler) SsoMfa(c *gin.Context) {
+	var ssoMfaResponse dto.SsoMfaResponse
+	var ssoMfaRequest dto.SsoMfaRequest
+
+	//get the request from the body
+
+	if err := c.ShouldBindJSON(&ssoMfaRequest); err != nil {
+		log.Default().Println("Error:", err)
+		ssoMfaResponse.Code = 500
+		ssoMfaResponse.Message = "Error"
+		ssoMfaResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		return
+	}
+
+	//get the session id from the request
+
+	sessionID := ssoMfaRequest.Token
+
+	//check if the session is valid
+
+	isvalid, name, role, err := getsession(sessionID)
+	name = strings.ToLower(name)
+	log.Default().Println("role:", role)
+	log.Default().Println("name:", name)
+	log.Default().Println("isvalid:", isvalid)
+
+	if err != nil {
+		log.Default().Println("Error:", err)
+		ssoMfaResponse.Code = 500
+		ssoMfaResponse.Message = "Error"
+		ssoMfaResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		return
+	}
+
+	if isvalid == false {
+		ssoMfaResponse.Code = 500
+		ssoMfaResponse.Message = "Error Session Expired"
+		ssoMfaResponse.Status = "error Session Expired"
+
+		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		return
+	}
+
+	var tenant models.Tenant
+
+	//get db name from url
+
+	dbname := strings.Split(ssoMfaRequest.Url, ".")[1]
+
+	db1 := db.GetConnectiontoDatabaseDynamically(dbname)
+
+	//get the tenant details
+
+	err = db1.Where("site_url = ?", ssoMfaRequest.Url).First(&tenant).Error
+	if err != nil {
+		log.Default().Println("Error:", err)
+		ssoMfaResponse.Code = 500
+		ssoMfaResponse.Message = "Error"
+		ssoMfaResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		return
+	}
+
+	//get the user details
+
+	var user models.User
+
+	err = db1.Where("email_address = ? and domain_id = ?", name, tenant.Id).First(&user).Error
+	if err != nil {
+		log.Default().Println("Error:", err)
+		ssoMfaResponse.Code = 500
+		ssoMfaResponse.Message = "User is not onboarded into the tenant"
+		ssoMfaResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		return
+	}
+
+	//make a call to the sso mfa endpoint
+
+	//url := os.Getenv("DO_AUTHNV4")
+	url := "https://prod.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
+
+	log.Default().Println("url:", url)
+
+	log.Default().Println("user:", user)
+
+	payload := map[string]interface{}{
+		"Username":       user.EmailAddress,
+		"CredentialType": "PLATFORM",
+		"OrgId":          user.OrgID,
+		"TenantId":       user.DomainId,
+		"RequestId":      ssoMfaRequest.RequestID,
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+
+	if err != nil {
+		log.Default().Println("Error:", err)
+		ssoMfaResponse.Code = 500
+		ssoMfaResponse.Message = "Error"
+		ssoMfaResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		return
+	}
+
+	log.Default().Println("payload:", string(payloadBytes))
+
+	client := &http.Client{}
+
+	// Create a new request using http
+
+	req, err := http.NewRequest("POST", url, strings.NewReader(string(payloadBytes)))
+
+	if err != nil {
+		log.Default().Println("Error:", err)
+		ssoMfaResponse.Code = 500
+		ssoMfaResponse.Message = "Error"
+		ssoMfaResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request via a client
+
+	resp, err := client.Do(req)
+
+	if err != nil {
+		log.Default().Println("Error:", err)
+		ssoMfaResponse.Code = 500
+		ssoMfaResponse.Message = "Error"
+		ssoMfaResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		return
+	}
+
+	// Callers should close resp.Body when done reading from it
+
+	defer resp.Body.Close()
+
+	// Check the response
+
+	if resp.StatusCode != http.StatusOK {
+
+		log.Default().Println("Error:", err)
+		ssoMfaResponse.Code = 500
+		ssoMfaResponse.Message = "Error"
+		ssoMfaResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		return
+	}
+
+	// Read the data from the response
+
+	body, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+
+		log.Default().Println("Error:", err)
+		ssoMfaResponse.Code = 500
+		ssoMfaResponse.Message = "Error"
+		ssoMfaResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		return
+	}
+
+	log.Default().Println("Response:", string(body))
+
+	var doAuthnResponse dto.DoAuthnResponse
+
+	err = json.Unmarshal(body, &doAuthnResponse)
+
+	if err != nil {
+
+		log.Default().Println("Error:", err)
+		ssoMfaResponse.Code = 500
+		ssoMfaResponse.Message = "Error"
+		ssoMfaResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		return
+	}
+
+	if doAuthnResponse.Code != 200 {
+
+		log.Default().Println("Error:", err)
+		ssoMfaResponse.Code = 500
+		ssoMfaResponse.Message = "Error"
+		ssoMfaResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		return
+	}
+
+	if !doAuthnResponse.IsValid {
+		log.Default().Println("Error:", err)
+		ssoMfaResponse.Code = 401
+		ssoMfaResponse.Message = "PR Denied"
+		ssoMfaResponse.Status = "PR Denied"
+
+		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		return
+	}
+
+	ssoMfaResponse.Code = 200
+	ssoMfaResponse.Message = "Success"
+	ssoMfaResponse.Status = "ok"
+	ssoMfaResponse.Data = true
+	ssoMfaResponse.FirstLogin = user.FirstLogin
+
+	//set the session id in the redis with the key userId orgid tenantid and value as session id
+	redis := db.GetRedisInstance()
+	log.Default().Println("Redis connection established successfully...")
+	key := fmt.Sprintf("%d:%d:%d", user.OrgID, user.DomainId, user.UserId)
+
+	value := sessionID
+
+	err = redis.Set(key, value, 0).Err()
+
+	if err != nil {
+		log.Default().Println("Error:", err)
+		ssoMfaResponse.Code = 500
+		ssoMfaResponse.Message = "Error"
+		ssoMfaResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		return
+	}
+
+	c.JSON(http.StatusOK, ssoMfaResponse)
+
 }

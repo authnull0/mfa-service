@@ -46,6 +46,7 @@ func RegisterRoutes(router *gin.Engine, webAuthnHandler *handlers.WebAuthnHandle
 		api.POST("/okta/normalLogin", loginHandler.HandleNormalLogin)
 		api.GET("/okta/favicon.ico", loginHandler.FaviconHandler)
 		api.GET("/okta/getsession", loginHandler.GetSession)
+		api.POST("/okta/ssomfa", loginHandler.SsoMfa)
 		api.GET("/okta/Logout", loginHandler.LogoutHandler)
 		api.POST("/saml/callback", loginHandler.HandleSamlResponse)
 		//API to handle emapta saml login request
