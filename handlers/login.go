@@ -1125,7 +1125,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
 		return
 	}
-
+	domainId, _ := strconv.Atoi(user.DomainId)
 	//make a call to the sso mfa endpoint
 
 	//url := os.Getenv("DO_AUTHNV4")
@@ -1139,7 +1139,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 		"Username":       user.EmailAddress,
 		"CredentialType": "PLATFORM",
 		"OrgId":          user.OrgID,
-		"TenantId":       user.DomainId,
+		"TenantId":       domainId,
 		"RequestId":      ssoMfaRequest.RequestID,
 	}
 
