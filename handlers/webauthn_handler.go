@@ -1002,7 +1002,7 @@ func (h *WebAuthnHandler) VerifyUser(c *gin.Context) {
 	for _, cfg := range configs {
 		result = append(result, dto.UserMfa{
 			MfaType:   cfg.MFAType,
-			MfaDetail: cfg.MFADetail,
+			Name:      cfg.MFADetail,
 			Status:    cfg.Status,
 			CreatedAt: cfg.CreatedAt,
 			UpdatedAt: cfg.CreatedAt,

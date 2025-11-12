@@ -118,7 +118,7 @@ type VerifyUserResponse struct {
 }
 type UserMfa struct {
 	MfaType   int       `json:"mfaType"`
-	MfaDetail string    `json:"mfaDetail"`
+	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	//Default   bool      `json:"is_default"`
