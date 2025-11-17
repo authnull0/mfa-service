@@ -573,7 +573,7 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 		}
 		//c.JSON(http.StatusOK, handleSamlResponse)
 		//return
-		authnullLogoutUrl := "https://default.emaptapam.prod.authnull.com/custom/Logout"
+		authnullLogoutUrl := "https://default.devsetup.prod.authnull.com/custom/Logout"
 		log.Default().Println("Redirecting to Authnull Logout URL:", authnullLogoutUrl)
 
 		c.Redirect(http.StatusFound, authnullLogoutUrl)
