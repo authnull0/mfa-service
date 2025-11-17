@@ -723,7 +723,7 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 		redirectParams.Set("userName", nameId)
 		redirectParams.Set("first_login", "1")
 		redirectParams.Set("token", session.ID) // or your actual token
-		redirectParams.Set("url", fmt.Sprintf("%s.%s.authnull.com", tenantName, orgName))
+		redirectParams.Set("url", fmt.Sprintf("%s.%s.dev.authnull.com", tenantName, orgName))
 
 		finalRedirectURL := fmt.Sprintf(
 			"https://ssc.authnull.com/ssc/signin?%s",
