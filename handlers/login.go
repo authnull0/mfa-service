@@ -720,7 +720,7 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 
 		redirectParams := url.Values{}
 
-		redirectParams.Set("userName", url.QueryEscape(nameId))
+		redirectParams.Set("userName", nameId)
 		redirectParams.Set("first_login", "1")
 		redirectParams.Set("token", session.ID) // or your actual token
 		redirectParams.Set("url", fmt.Sprintf("%s.%s.authnull.com", tenantName, orgName))
