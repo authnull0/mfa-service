@@ -721,7 +721,7 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 		data := url.Values{}
 		data.Set("session", session.ID)
 
-		audience = audience + ".prod.authnull.com"
+		audience = "ssc.authnull.com"
 		// Prepare the redirect URL with query parameters
 		URL := audience + "?" + data.Encode()
 
