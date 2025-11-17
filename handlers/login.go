@@ -718,20 +718,21 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 
 		//data to sent to frontend while redirecting
 
-		data := url.Values{}
-		data.Set("session", session.ID)
+		redirectParams := url.Values{}
 
-		audience = "ssc.authnull.com"
-		// Prepare the redirect URL with query parameters
-		URL := audience + "?" + data.Encode()
+		redirectParams.Set("userName", url.QueryEscape(nameId))
+		redirectParams.Set("first_login", "1")
+		redirectParams.Set("token", session.ID) // or your actual token
+		redirectParams.Set("url", fmt.Sprintf("%s.%s.authnull.com", tenantName, orgName))
 
-		URL = "https://" + URL
+		finalRedirectURL := fmt.Sprintf(
+			"https://ssc.authnull.com/ssc/signin?%s",
+			redirectParams.Encode(),
+		)
 
-		log.Default().Println("Redirect URL:", URL)
+		log.Default().Println("Redirect URL:", finalRedirectURL)
+		c.Redirect(http.StatusFound, finalRedirectURL)
 
-		// Perform the redirect
-
-		c.Redirect(http.StatusMovedPermanently, URL)
 	}
 }
 
