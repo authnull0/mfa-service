@@ -40,7 +40,7 @@ func OnboardUser(orgName string, tenantName string, nameID string, audience stri
 	payloadBytes, _ := json.Marshal(payload)
 	log.Default().Printf("Calling SamlOnboard User API")
 
-	req, err := http.NewRequest("POST", "https://dev.tenants.authnull.com/samlOnboardUser", bytes.NewBuffer(payloadBytes))
+	req, err := http.NewRequest("POST", "https://prod.tenants.authnull.com/samlOnboardUser", bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		return fmt.Errorf("failed to create onboarding request: %v", err)
 	}
