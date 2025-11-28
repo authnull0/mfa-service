@@ -196,7 +196,7 @@ func (r *MFARepository) GetUserMFAMethods(domainID string) ([]models.MFAConfig, 
 
 	// Now fetch from MFA config table where status = Active and ID in factorIDs
 	var methods []models.MFAConfig
-	if err := r.DB.Where("id IN ? AND status = ?", factorIDs, "Active").Find(&methods).Error; err != nil {
+	if err := r.DB.Where("id IN ? AND status = ? and factor_type = ? ", factorIDs, "Active", "SECONDARY").Find(&methods).Error; err != nil {
 		return nil, fmt.Errorf("failed to fetch MFA config: %w", err)
 	}
 
