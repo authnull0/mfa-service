@@ -330,11 +330,11 @@ func (h *LoginHandler) HandleNormalLogin(c *gin.Context) {
 
 	var tenant models.Tenant
 
-	err = db1.Where("id = ?", user.DomainId).First(&tenant).Error
+	err = db1.Where("id = ? and status = ? ", user.DomainId, "active").First(&tenant).Error
 	if err != nil {
 		log.Default().Println("Error:", err)
 		normalLoginResponse.Code = 500
-		normalLoginResponse.Message = "Error"
+		normalLoginResponse.Message = "Tenant Not Found or Inactive"
 		normalLoginResponse.Status = "error"
 		c.JSON(http.StatusInternalServerError, normalLoginResponse)
 		return
@@ -613,11 +613,11 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 
 	log.Default().Printf("Name ID: %s", nameId)
 
-	if err := db.Where("tenant_name ILIKE ?", tenantName).First(&tenant).Error; err != nil {
+	if err := db.Where("tenant_name ILIKE ? and status = ?", tenantName, "active").First(&tenant).Error; err != nil {
 		handleSamlResponse = &dto.HandleSamlResponse{
 			Code:    500,
 			Status:  "Failed",
-			Message: "Tenant Table Not Found",
+			Message: "Tenant Not Found or Inactive",
 		}
 		c.JSON(http.StatusInternalServerError, handleSamlResponse)
 		return
