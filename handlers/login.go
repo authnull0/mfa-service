@@ -216,7 +216,7 @@ func (h *LoginHandler) HandleNormalLogin(c *gin.Context) {
 	if err := db1.Where("email_address = ?", normalLoginRequest.Username).First(&user).Error; err != nil {
 		log.Default().Println("Error:", err)
 		normalLoginResponse.Code = 500
-		normalLoginResponse.Message = "Error"
+		normalLoginResponse.Message = "Invalid Username"
 		normalLoginResponse.Status = "error"
 		normalLoginResponse.FirstLogin = user.FirstLogin
 		c.JSON(http.StatusInternalServerError, normalLoginResponse)
