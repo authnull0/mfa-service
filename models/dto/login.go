@@ -68,3 +68,24 @@ type DoAuthnResponse struct {
 	SsoUrl    string `json:"ssoUrl"`
 	Stage     int    `json:"stage"`
 }
+type EntraAuthRequest struct {
+	Version       string `json:"version"`
+	RequestID     string `json:"requestId"`
+	Username      string `json:"username"`
+	ClientApp     string `json:"clientApp"`
+	TransactionID string `json:"transactionId"`
+}
+
+type EntraAuthResponse struct {
+	Authenticated bool   `json:"authenticated"`
+	ErrorMessage  string `json:"errorMessage,omitempty"`
+}
+
+// ---------------------------
+// Metadata (required by Entra)
+// ---------------------------
+type Metadata struct {
+	Version                string `json:"version"`
+	AuthenticationMode     string `json:"authenticationMode"`
+	AuthenticationEndpoint string `json:"authenticationEndpoint"`
+}

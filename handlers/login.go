@@ -1288,3 +1288,37 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 	c.JSON(http.StatusOK, ssoMfaResponse)
 
 }
+func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Authentication endpoint hit!")
+
+	var req dto.EntraAuthRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		log.Println("Invalid JSON:", err)
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Received from Entra: %+v\n", req)
+
+	// Always return success (dummy MFA)
+	resp := dto.EntraAuthResponse{
+		Authenticated: true,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Metadata endpoint called by Entra")
+
+	meta := dto.Metadata{
+		Version:                "1.0.0",
+		AuthenticationMode:     "Synchronous",
+		AuthenticationEndpoint: "https://your-domain.com/auth/external-mfa",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(meta)
+}
