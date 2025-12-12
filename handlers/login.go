@@ -1337,39 +1337,42 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 // This handler must be correctly registered for the GET method.
 // NOTE: I am renaming the function to reflect its role as the initial Authorization Endpoint.
 func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("Authorization Endpoint (Initial GET) hit! Starting user sign-in flow...")
+	log.Printf("Authorization Endpoint hit! Method: %s", r.Method)
 
-	// 1. Extract Critical OIDC Parameters (Sent via GET query)
+	// The OIDC parameters are ALWAYS expected in the URL query string
+	// for the initial authorization request, even if the method is unexpectedly POST.
 	query := r.URL.Query()
-	log.Println("--- Received Query Parameters ---")
-	for key, values := range query {
-		log.Printf("Key: %s, Value(s): %v", key, values)
-	}
-	redirectURI := query.Get("redirect_uri") // The Entra ID callback URL (CRITICAL)
-	state := query.Get("state")              // The OIDC state parameter (CRITICAL)
-	loginHint := query.Get("login_hint")     // The username (e.g., safiya@authnull.com)
 
-	// You MUST handle all required OIDC params, but redirect_uri and state are essential for the final step.
+	// Check the query string first for the essential parameters
+	redirectURI := query.Get("redirect_uri")
+	state := query.Get("state")
+	loginHint := query.Get("login_hint")
+
+	// --- DEBUGGING LOGS ---
+	log.Printf("--- Received Query Parameters ---")
+	log.Printf("Method: %s", r.Method)
+	log.Printf("Redirect URI: %s, State: %s, User: %s", redirectURI, state, loginHint)
+	log.Println("---------------------------------")
+	// --- END DEBUGGING LOGS ---
+
+	// 1. Check for required parameters
 	if redirectURI == "" || state == "" {
-		log.Println("Missing required OIDC parameters.")
+		// If they are missing here, the parameters were not in the URL, which is a FATAL flow error.
+		log.Println("FATAL: Missing required OIDC parameters in URL query.")
 		http.Error(w, "Missing required OIDC parameters", http.StatusBadRequest)
 		return
 	}
 
-	// --- THIS IS THE CRITICAL LOGIC ---
-	// At this point, you have the data needed for the final callback.
-	// 2. You would typically store the (state, redirectURI, loginHint) in a session/DB.
+	// --- The Flow is Now Corrected ---
 
-	// 3. Instead of the dummy response you had before, you must now redirect the user
-	// to your custom sign-in page where they will call your custom authentication API.
+	// 2. You would save (state, redirectURI, loginHint) here.
 
-	// FOR TROUBLESHOOTING: Just log the parameters and redirect to a dummy success page
-	// to see if the AADSTS500125 error goes away.
-	log.Printf("User: %s, Redirect URI: %s, State: %s", loginHint, redirectURI, state)
-
-	// Example: Redirect to your internal sign-in page or render a form to POST to your internal API
+	// 3. For immediate testing, instead of redirecting, confirm success:
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("<html><body>Redirecting to your MFA... User: %s</body></html>", loginHint)))
+	w.Write([]byte(fmt.Sprintf("<html><body>OIDC flow received successfully for user %s. Next step: JWT Signing and POST to Entra ID.</body></html>", loginHint)))
+
+	// A real implementation would now redirect the user to your custom MFA flow.
+	// http.Redirect(w, r, "/your/custom/mfa/login", http.StatusFound)
 }
 func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Metadata endpoint called by Entra")
