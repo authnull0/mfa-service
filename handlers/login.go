@@ -1365,8 +1365,8 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	meta := dto.Metadata{
 		// Standard OIDC Fields
 		Issuer:                           issuerURL,
-		AuthorizationEndpoint:            issuerURL + "/auth/external-mfa", // Your custom POST URL
-		JwksURI:                          issuerURL + "/oauth2/v1/keys",    // IMPORTANT: You must also implement this keys endpoint!
+		AuthorizationEndpoint:            issuerURL + "/auth/external-mfa", // Your custom URL
+		JwksURI:                          issuerURL + "/oauth2/v1/keys",    // IMPORTANT: Must implement this keys endpoint
 		ResponseTypesSupported:           []string{"id_token", "token"},
 		IdTokenSigningAlgValuesSupported: []string{"RS256"},
 		SubjectTypesSupported:            []string{"public"},

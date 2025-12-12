@@ -55,7 +55,7 @@ func RegisterRoutes(router *gin.Engine, webAuthnHandler *handlers.WebAuthnHandle
 		api.POST("/backToLogin", loginHandler.BackToLogin)
 
 		// NEW — Entra EAM metadata endpoint
-		api.GET("/.well-known/authentication-configuration", func(c *gin.Context) {
+		api.GET("/.well-known/openid-configuration", func(c *gin.Context) {
 			loginHandler.MetadataHandler(c.Writer, c.Request)
 		})
 
