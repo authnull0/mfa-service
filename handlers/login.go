@@ -1333,40 +1333,52 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 	c.JSON(http.StatusOK, ssoMfaResponse)
 
 }
-func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("Authentication endpoint hit!")
 
-	var req dto.EntraAuthRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		log.Println("Invalid JSON:", err)
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+// This handler must be correctly registered for the GET method.
+// NOTE: I am renaming the function to reflect its role as the initial Authorization Endpoint.
+func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Authorization Endpoint (Initial GET) hit! Starting user sign-in flow...")
+
+	// 1. Extract Critical OIDC Parameters (Sent via GET query)
+	query := r.URL.Query()
+	redirectURI := query.Get("redirect_uri") // The Entra ID callback URL (CRITICAL)
+	state := query.Get("state")              // The OIDC state parameter (CRITICAL)
+	loginHint := query.Get("login_hint")     // The username (e.g., safiya@authnull.com)
+
+	// You MUST handle all required OIDC params, but redirect_uri and state are essential for the final step.
+	if redirectURI == "" || state == "" {
+		log.Println("Missing required OIDC parameters.")
+		http.Error(w, "Missing required OIDC parameters", http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("Received from Entra: %+v\n", req)
+	// --- THIS IS THE CRITICAL LOGIC ---
+	// At this point, you have the data needed for the final callback.
+	// 2. You would typically store the (state, redirectURI, loginHint) in a session/DB.
 
-	// Always return success (dummy MFA)
-	resp := dto.EntraAuthResponse{
-		Authenticated: true,
-	}
+	// 3. Instead of the dummy response you had before, you must now redirect the user
+	// to your custom sign-in page where they will call your custom authentication API.
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	// FOR TROUBLESHOOTING: Just log the parameters and redirect to a dummy success page
+	// to see if the AADSTS500125 error goes away.
+	log.Printf("User: %s, Redirect URI: %s, State: %s", loginHint, redirectURI, state)
+
+	// Example: Redirect to your internal sign-in page or render a form to POST to your internal API
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(fmt.Sprintf("<html><body>Redirecting to your MFA... User: %s</body></html>", loginHint)))
 }
-
 func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Metadata endpoint called by Entra")
 
 	// Define your Issuer URL base
-	issuerURL := "https://dev.api.authnull.com/authentication"
+	issuerURL := "https://dev.api.authnull.com"
 
 	// Construct the full metadata response
 	meta := dto.Metadata{
 		// Standard OIDC Fields
 		Issuer:                           issuerURL,
-		AuthorizationEndpoint:            issuerURL + "/auth/external-mfa", // Your custom URL
-		JwksURI:                          issuerURL + "/oauth2/v1/keys",    // IMPORTANT: Must implement this keys endpoint
+		AuthorizationEndpoint:            issuerURL + "/authentication/auth/external-mfa", // Your custom URL
+		JwksURI:                          issuerURL + "/authentication/oauth2/v1/keys",    // IMPORTANT: Must implement this keys endpoint
 		ResponseTypesSupported:           []string{"id_token", "token"},
 		IdTokenSigningAlgValuesSupported: []string{"RS256"},
 		SubjectTypesSupported:            []string{"public"},
@@ -1375,7 +1387,7 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 		// Custom EAM Fields
 		Version:                "1.0.0",
 		AuthenticationMode:     "Synchronous",
-		AuthenticationEndpoint: issuerURL + "/auth/external-mfa",
+		AuthenticationEndpoint: issuerURL + "/authentication/auth/external-mfa",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
