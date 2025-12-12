@@ -1316,7 +1316,7 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	meta := dto.Metadata{
 		Version:                "1.0.0",
 		AuthenticationMode:     "Synchronous",
-		AuthenticationEndpoint: "https://your-domain.com/auth/external-mfa",
+		AuthenticationEndpoint: "https://dev.api.authnull.com/authenticate/auth/external-mfa",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
