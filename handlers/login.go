@@ -1383,6 +1383,7 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("Error encoding metadata:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
+	log.Default().Printf("Response Metadata: %+v", meta)
 
 }
 
