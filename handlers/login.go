@@ -1359,14 +1359,14 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Metadata endpoint called by Entra")
 
 	// Define your Issuer URL base
-	issuerURL := "https://dev.api.authnull.com"
+	issuerURL := "https://dev.api.authnull.com/authentication"
 
 	// Construct the full metadata response
 	meta := dto.Metadata{
 		// Standard OIDC Fields
 		Issuer:                           issuerURL,
-		AuthorizationEndpoint:            issuerURL + "/authenticate/auth/external-mfa", // Your custom POST URL
-		JwksURI:                          issuerURL + "/authenticate/oauth2/v1/keys",    // IMPORTANT: You must also implement this keys endpoint!
+		AuthorizationEndpoint:            issuerURL + "/auth/external-mfa", // Your custom POST URL
+		JwksURI:                          issuerURL + "/oauth2/v1/keys",    // IMPORTANT: You must also implement this keys endpoint!
 		ResponseTypesSupported:           []string{"id_token", "token"},
 		IdTokenSigningAlgValuesSupported: []string{"RS256"},
 		SubjectTypesSupported:            []string{"public"},
@@ -1375,7 +1375,7 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 		// Custom EAM Fields
 		Version:                "1.0.0",
 		AuthenticationMode:     "Synchronous",
-		AuthenticationEndpoint: issuerURL + "/authenticate/auth/external-mfa",
+		AuthenticationEndpoint: issuerURL + "/auth/external-mfa",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
