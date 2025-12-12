@@ -63,5 +63,9 @@ func RegisterRoutes(router *gin.Engine, webAuthnHandler *handlers.WebAuthnHandle
 		api.POST("/auth/external-mfa", func(ctx *gin.Context) {
 			loginHandler.ExternalMFAHandler(ctx.Writer, ctx.Request)
 		})
+
+		api.POST("/oauth2/v1/keys", func(c *gin.Context) {
+			loginHandler.JwksHandler(c.Writer, c.Request)
+		})
 	}
 }

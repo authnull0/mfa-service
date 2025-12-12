@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -12,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -29,6 +31,23 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/okta/okta-sdk-golang/okta"
 )
+
+// Jwk and Jwks structs remain the same as defined previously
+type Jwk struct {
+	Kty string `json:"kty"`
+	Kid string `json:"kid"`
+	Use string `json:"use"`
+	N   string `json:"n"`
+	E   string `json:"e"`
+}
+
+type Jwks struct {
+	Keys []Jwk `json:"keys"`
+}
+
+// Define global variable to hold the generated JWK struct
+var publicJWK *Jwk
+var signingKid string
 
 type LoginHandler struct {
 	Service *services.LoginService
@@ -146,6 +165,31 @@ func Init() {
 		panic(err) // TODO handle error
 	}
 
+	// --- NEW: Extract Public Key Components for OIDC/JWKS ---
+	pubKey, ok := keyPair.Leaf.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		panic("Certificate public key is not an RSA key")
+	}
+
+	// 1. Generate a Key ID (KID) - Using a hash of the public key's DER encoding is common practice
+	hasher := sha256.New()
+	hasher.Write(keyPair.Leaf.RawSubjectPublicKeyInfo)
+	signingKid = base64.RawURLEncoding.EncodeToString(hasher.Sum(nil)[:10])
+
+	// 2. Extract Modulus (N) and Exponent (E)
+	n := base64UrlEncode(pubKey.N)
+	// E = Public Exponent (Base64 URL-safe encoded)
+	e := base64UrlEncode(big.NewInt(int64(pubKey.E)))
+
+	// 3. Populate the global publicJWK struct
+	publicJWK = &Jwk{
+		Kty: "RSA",
+		Kid: signingKid,
+		Use: "sig",
+		N:   n,
+		E:   e,
+	}
+
 	rootURL, err := url.Parse(rootURLstr)
 	if err != nil {
 		panic(err) // TODO handle error
@@ -181,6 +225,7 @@ func Init() {
 		panic(err) // TODO handle error
 	}
 	log.Println("Loaded IdP EntityID:", samlSP.ServiceProvider.IDPMetadata.EntityID)
+	log.Println("OIDC Signing KID:", signingKid) // Log the KID for debugging and JWT header use!
 
 }
 func (h *LoginHandler) FaviconHandler(c *gin.Context) {
@@ -1321,7 +1366,7 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 		// Standard OIDC Fields
 		Issuer:                           issuerURL,
 		AuthorizationEndpoint:            issuerURL + "/authenticate/auth/external-mfa", // Your custom POST URL
-		JwksURI:                          issuerURL + "/oauth2/v1/keys",                 // IMPORTANT: You must also implement this keys endpoint!
+		JwksURI:                          issuerURL + "/authenticate/oauth2/v1/keys",    // IMPORTANT: You must also implement this keys endpoint!
 		ResponseTypesSupported:           []string{"id_token", "token"},
 		IdTokenSigningAlgValuesSupported: []string{"RS256"},
 		SubjectTypesSupported:            []string{"public"},
@@ -1339,4 +1384,30 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 
+}
+
+// Remember to register this handler on the path specified in your OIDC metadata (e.g., /oauth2/v1/keys)
+func (h *LoginHandler) JwksHandler(w http.ResponseWriter, r *http.Request) {
+	if publicJWK == nil {
+		log.Println("Error: JWKS not initialized. Init() failed?")
+		http.Error(w, "JWKS not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	jwks := Jwks{
+		Keys: []Jwk{*publicJWK},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+
+	if err := json.NewEncoder(w).Encode(jwks); err != nil {
+		log.Println("Error encoding JWKS:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// Custom Base64 URL-safe encoder function (needed for N and E)
+func base64UrlEncode(b *big.Int) string {
+	return base64.RawURLEncoding.EncodeToString(b.Bytes())
 }
