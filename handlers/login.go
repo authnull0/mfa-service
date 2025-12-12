@@ -1339,35 +1339,56 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Authorization Endpoint hit! Method: %s", r.Method)
 
-	// The OIDC parameters are ALWAYS expected in the URL query string
-	// for the initial authorization request, even if the method is unexpectedly POST.
-	query := r.URL.Query()
+	// --- NEW: Parse the Form Body for POST requests ---
+	var redirectURI, state, loginHint string
 
-	// Check the query string first for the essential parameters
-	redirectURI := query.Get("redirect_uri")
-	state := query.Get("state")
-	loginHint := query.Get("login_hint")
+	// 1. If it's a POST, the parameters are in the body. If it's a GET, they are in the URL.
+	if r.Method == "POST" {
+		// Parse the body to populate r.Form. This is required to read form data.
+		if err := r.ParseForm(); err != nil {
+			log.Printf("FATAL: Error parsing POST form body: %v", err)
+			http.Error(w, "Error processing request data", http.StatusBadRequest)
+			return
+		}
 
-	// --- DEBUGGING LOGS ---
-	log.Printf("--- Received Query Parameters ---")
+		// Read parameters from the parsed Form body
+		redirectURI = r.Form.Get("redirect_uri")
+		state = r.Form.Get("state")
+		loginHint = r.Form.Get("login_hint")
+
+	} else if r.Method == "GET" {
+		// Fallback for standard GET behavior (reading from URL query)
+		query := r.URL.Query()
+		redirectURI = query.Get("redirect_uri")
+		state = query.Get("state")
+		loginHint = query.Get("login_hint")
+
+	} else {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// --- DEBUGGING LOGS (Now showing Form values) ---
+	log.Printf("--- Received Query/Form Parameters ---")
 	log.Printf("Method: %s", r.Method)
+	// You should now see values here!
 	log.Printf("Redirect URI: %s, State: %s, User: %s", redirectURI, state, loginHint)
 	log.Println("---------------------------------")
 	// --- END DEBUGGING LOGS ---
 
-	// 1. Check for required parameters
+	// 2. Check for required parameters
 	if redirectURI == "" || state == "" {
-		// If they are missing here, the parameters were not in the URL, which is a FATAL flow error.
-		log.Println("FATAL: Missing required OIDC parameters in URL query.")
+		// This is the true check now, after looking in the correct place (the POST body)
+		log.Println("FATAL: Missing required OIDC parameters.")
 		http.Error(w, "Missing required OIDC parameters", http.StatusBadRequest)
 		return
 	}
 
 	// --- The Flow is Now Corrected ---
+	log.Println("OIDC parameters successfully extracted from POST body.")
 
-	// 2. You would save (state, redirectURI, loginHint) here.
+	// 3. You would save (state, redirectURI, loginHint) here.
 
-	// 3. For immediate testing, instead of redirecting, confirm success:
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(fmt.Sprintf("<html><body>OIDC flow received successfully for user %s. Next step: JWT Signing and POST to Entra ID.</body></html>", loginHint)))
 
