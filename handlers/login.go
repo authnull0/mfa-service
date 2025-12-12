@@ -1336,7 +1336,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 
 // This handler must be correctly registered for the GET method.
 // NOTE: I am renaming the function to reflect its role as the initial Authorization Endpoint.
-func (h *LoginHandler) ExternalMfaAuthorizationHandler(w http.ResponseWriter, r *http.Request) {
+func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Authorization Endpoint hit! Method: %s", r.Method)
 
 	// The OIDC parameters are ALWAYS expected in the URL query string
