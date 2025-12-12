@@ -1341,6 +1341,10 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 
 	// 1. Extract Critical OIDC Parameters (Sent via GET query)
 	query := r.URL.Query()
+	log.Println("--- Received Query Parameters ---")
+	for key, values := range query {
+		log.Printf("Key: %s, Value(s): %v", key, values)
+	}
 	redirectURI := query.Get("redirect_uri") // The Entra ID callback URL (CRITICAL)
 	state := query.Get("state")              // The OIDC state parameter (CRITICAL)
 	loginHint := query.Get("login_hint")     // The username (e.g., safiya@authnull.com)
