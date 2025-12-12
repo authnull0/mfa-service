@@ -85,7 +85,17 @@ type EntraAuthResponse struct {
 // Metadata (required by Entra)
 // ---------------------------
 type Metadata struct {
-	Version                string `json:"version"`
-	AuthenticationMode     string `json:"authenticationMode"`
-	AuthenticationEndpoint string `json:"authenticationEndpoint"`
+	// Standard OIDC Required Fields
+	Issuer                           string   `json:"issuer"`                                // REQUIRED: The URL of your service.
+	AuthorizationEndpoint            string   `json:"authorization_endpoint"`                // REQUIRED: The URL Entra ID redirects the user to for authentication.
+	JwksURI                          string   `json:"jwks_uri"`                              // REQUIRED: Where Entra ID finds your public keys for signature validation.
+	ResponseTypesSupported           []string `json:"response_types_supported"`              // REQUIRED: Must include "id_token" for EAM.
+	IdTokenSigningAlgValuesSupported []string `json:"id_token_signing_alg_values_supported"` // REQUIRED: Must include "RS256".
+	SubjectTypesSupported            []string `json:"subject_types_supported"`               // REQUIRED: Must include "public".
+	ScopesSupported                  []string `json:"scopes_supported,omitempty"`            // Optional, but usually "openid" is included.
+
+	// Custom EAM Fields
+	Version                string `json:"version"`                // EAM-specific
+	AuthenticationMode     string `json:"authenticationMode"`     // EAM-specific: "Synchronous"
+	AuthenticationEndpoint string `json:"authenticationEndpoint"` // EAM-specific: Your POST endpoint URL.
 }
