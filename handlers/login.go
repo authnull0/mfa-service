@@ -1313,12 +1313,30 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Metadata endpoint called by Entra")
 
+	// Define your Issuer URL base
+	issuerURL := "https://dev.api.authnull.com"
+
+	// Construct the full metadata response
 	meta := dto.Metadata{
+		// Standard OIDC Fields
+		Issuer:                           issuerURL,
+		AuthorizationEndpoint:            issuerURL + "/authenticate/auth/external-mfa", // Your custom POST URL
+		JwksURI:                          issuerURL + "/oauth2/v1/keys",                 // IMPORTANT: You must also implement this keys endpoint!
+		ResponseTypesSupported:           []string{"id_token", "token"},
+		IdTokenSigningAlgValuesSupported: []string{"RS256"},
+		SubjectTypesSupported:            []string{"public"},
+		ScopesSupported:                  []string{"openid", "profile"},
+
+		// Custom EAM Fields
 		Version:                "1.0.0",
 		AuthenticationMode:     "Synchronous",
-		AuthenticationEndpoint: "https://dev.api.authnull.com/authenticate/auth/external-mfa",
+		AuthenticationEndpoint: issuerURL + "/authenticate/auth/external-mfa",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(meta)
+	if err := json.NewEncoder(w).Encode(meta); err != nil {
+		log.Println("Error encoding metadata:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+
 }
