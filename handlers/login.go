@@ -1339,17 +1339,25 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Authorization Endpoint hit! Method: %s", r.Method)
 
-	// --- NEW: Parse the Form Body for POST requests ---
 	var redirectURI, state, loginHint string
 
-	// 1. If it's a POST, the parameters are in the body. If it's a GET, they are in the URL.
+	// 1. Handle POST: Parse the Form Body
 	if r.Method == "POST" {
-		// Parse the body to populate r.Form. This is required to read form data.
 		if err := r.ParseForm(); err != nil {
 			log.Printf("FATAL: Error parsing POST form body: %v", err)
 			http.Error(w, "Error processing request data", http.StatusBadRequest)
 			return
 		}
+
+		// --- NEW DEBUGGING CODE START ---
+		log.Println("--- All Received POST Body Parameters ---")
+		// r.Form holds all parameters from the body
+		for key, values := range r.Form {
+			// Print the key and all associated values (though usually just one value per key for OIDC)
+			log.Printf("Key: %s, Value(s): %v", key, values)
+		}
+		log.Println("---------------------------------------")
+		// --- NEW DEBUGGING CODE END ---
 
 		// Read parameters from the parsed Form body
 		redirectURI = r.Form.Get("redirect_uri")
@@ -1357,44 +1365,32 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 		loginHint = r.Form.Get("login_hint")
 
 	} else if r.Method == "GET" {
-		// Fallback for standard GET behavior (reading from URL query)
+		// Fallback for GET (reading from URL query)
 		query := r.URL.Query()
 		redirectURI = query.Get("redirect_uri")
 		state = query.Get("state")
 		loginHint = query.Get("login_hint")
+		// ... (You can add a similar loop here for GET if needed)
 
 	} else {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// --- DEBUGGING LOGS (Now showing Form values) ---
-	log.Printf("--- Received Query/Form Parameters ---")
-	log.Printf("Method: %s", r.Method)
-	// You should now see values here!
-	log.Printf("Redirect URI: %s, State: %s, User: %s", redirectURI, state, loginHint)
-	log.Println("---------------------------------")
-	// --- END DEBUGGING LOGS ---
-
-	// 2. Check for required parameters
+	// Check for required parameters
 	if redirectURI == "" || state == "" {
-		// This is the true check now, after looking in the correct place (the POST body)
 		log.Println("FATAL: Missing required OIDC parameters.")
 		http.Error(w, "Missing required OIDC parameters", http.StatusBadRequest)
 		return
 	}
 
-	// --- The Flow is Now Corrected ---
-	log.Println("OIDC parameters successfully extracted from POST body.")
+	log.Printf("OIDC parameters successfully extracted. Redirect URI: %s", redirectURI)
 
-	// 3. You would save (state, redirectURI, loginHint) here.
-
+	// SUCCESS path (rest of your logic goes here)
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("<html><body>OIDC flow received successfully for user %s. Next step: JWT Signing and POST to Entra ID.</body></html>", loginHint)))
-
-	// A real implementation would now redirect the user to your custom MFA flow.
-	// http.Redirect(w, r, "/your/custom/mfa/login", http.StatusFound)
+	w.Write([]byte(fmt.Sprintf("<html><body>OIDC flow received successfully for user %s. Next step: JWT Signing.</body></html>", loginHint)))
 }
+
 func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Metadata endpoint called by Entra")
 
