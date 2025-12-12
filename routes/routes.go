@@ -60,7 +60,7 @@ func RegisterRoutes(router *gin.Engine, webAuthnHandler *handlers.WebAuthnHandle
 		})
 
 		// NEW — Entra EAM dummy MFA endpoint
-		api.POST("/auth/external-mfa", func(ctx *gin.Context) {
+		api.GET("/auth/external-mfa", func(ctx *gin.Context) {
 			loginHandler.ExternalMFAHandler(ctx.Writer, ctx.Request)
 		})
 
