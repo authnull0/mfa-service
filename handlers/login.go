@@ -202,6 +202,7 @@ func Init() {
 		N:   n,
 		E:   e,
 	}
+	log.Printf("DEBUG: Populated Public JWK: %+v", publicJWK)
 
 	rootURL, err := url.Parse(rootURLstr)
 	if err != nil {
@@ -1544,6 +1545,7 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 
 // Remember to register this handler on the path specified in your OIDC metadata (e.g., /oauth2/v1/keys)
 func (h *LoginHandler) JwksHandler(w http.ResponseWriter, r *http.Request) {
+	log.Default().Printf("Public Key : %+v ", publicJWK)
 	if publicJWK == nil {
 		log.Println("Error: JWKS not initialized. Init() failed?")
 		http.Error(w, "JWKS not initialized", http.StatusInternalServerError)
@@ -1553,6 +1555,7 @@ func (h *LoginHandler) JwksHandler(w http.ResponseWriter, r *http.Request) {
 	jwks := Jwks{
 		Keys: []Jwk{*publicJWK},
 	}
+	log.Printf("DEBUG: Populated JWKS: %+v", jwks)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
