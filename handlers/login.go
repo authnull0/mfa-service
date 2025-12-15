@@ -1376,8 +1376,8 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 	state = r.Form.Get("state")
 	//loginHint = r.Form.Get("login_hint")
 	state = r.Form.Get("state")
-	nonce := r.Form.Get("nonce") // Needed for the final JWT claims
-	//clientID := r.Form.Get("client_id") // Needed for the 'aud' claim
+	nonce := r.Form.Get("nonce")        // Needed for the final JWT claims
+	clientID := r.Form.Get("client_id") // Needed for the 'aud' claim
 
 	idTokenHint := r.Form.Get("id_token_hint")
 
@@ -1506,7 +1506,7 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 		log.Default().Println("Error:", err)
 		return
 	} else if doAuthnResponse.IsValid {
-		SignAndPostJWT(w, r, username, redirectURI, state, nonce)
+		SignAndPostJWT(w, r, username, redirectURI, state, nonce, clientID)
 	}
 }
 
@@ -1581,7 +1581,7 @@ type FinalClaims struct {
 	TID               string `json:"tid,omitempty"`
 }
 
-func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectURI, state, nonce string) {
+func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectURI, state, nonce string, clientID string) {
 	now := time.Now()
 
 	// Get the User's Subject (sub) from the username
@@ -1593,8 +1593,8 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 	// The JWT must expire quickly (e.g., 5 minutes)
 	claims := FinalClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "https://dev.api.authnull.com/authentication",            // Your Issuer URL
-			Audience:  jwt.ClaimStrings{"0783e688-f709-412c-beb6-29129131a40e"}, // The client_id Entra ID sent you
+			Issuer:    "https://dev.api.authnull.com", // Your Issuer URL
+			Audience:  jwt.ClaimStrings{clientID},     // The client_id Entra ID sent you
 			ExpiresAt: jwt.NewNumericDate(now.Add(5 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
@@ -1602,8 +1602,8 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 		},
 		Acr:               "possessionorinherence", // Standard value for strong MFA
 		Amr:               "fpt",                   // Fingerprint or other factor used by your platform
-		Nonce:             nonce,
 		PreferredUsername: username,
+		Nonce:             nonce,
 	}
 	if privateKey == nil {
 		log.Printf("FATAL: Private key not initialized. Init() failed?")
