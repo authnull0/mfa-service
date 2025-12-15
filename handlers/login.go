@@ -152,6 +152,8 @@ var storage samlidp.MemoryStore
 
 var keyPair tls.Certificate
 
+var privateKey *rsa.PrivateKey
+
 func Init() {
 
 	//rootURLstr = os.Getenv("ROOT_URL")
@@ -1370,6 +1372,9 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 	redirectURI = r.Form.Get("redirect_uri")
 	state = r.Form.Get("state")
 	loginHint = r.Form.Get("login_hint")
+	state = r.Form.Get("state")
+	nonce := r.Form.Get("nonce") // Needed for the final JWT claims
+	//clientID := r.Form.Get("client_id") // Needed for the 'aud' claim
 
 	idTokenHint := r.Form.Get("id_token_hint")
 
@@ -1481,7 +1486,6 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 	var doAuthnResponse dto.DoAuthnResponse
 
 	err = json.Unmarshal(body, &doAuthnResponse)
-
 	if err != nil {
 
 		log.Default().Println("Error:", err)
@@ -1497,8 +1501,9 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 	if !doAuthnResponse.IsValid {
 		log.Default().Println("Error:", err)
 		return
+	} else if doAuthnResponse.IsValid {
+		SignAndPostJWT(w, r, username, redirectURI, state, nonce)
 	}
-
 }
 
 func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
@@ -1557,4 +1562,76 @@ func (h *LoginHandler) JwksHandler(w http.ResponseWriter, r *http.Request) {
 // Custom Base64 URL-safe encoder function (needed for N and E)
 func base64UrlEncode(b *big.Int) string {
 	return base64.RawURLEncoding.EncodeToString(b.Bytes())
+}
+
+type FinalClaims struct {
+	jwt.RegisteredClaims
+	// Mandatory Claims for OIDC:
+	Sub   string `json:"sub"`   // Subject (user identifier)
+	Acr   string `json:"acr"`   // Authentication Context Class Reference (MFA success)
+	Amr   string `json:"amr"`   // Authentication Methods Reference (MFA methods used)
+	Nonce string `json:"nonce"` // Passed from the original client request (Optional, but good practice)
+
+	// Additional claims based on the original token's user info:
+	PreferredUsername string `json:"preferred_username,omitempty"`
+	TID               string `json:"tid,omitempty"`
+}
+
+func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectURI, state, nonce string) {
+	now := time.Now()
+
+	// Get the User's Subject (sub) from the username
+	// Note: In a real app, you should use the 'sub' from the id_token_hint for consistency.
+	// For simplicity, we derive it from the username here.
+	sub := sha256.Sum256([]byte(username))
+
+	// 1. Define Expiration, Issuer, and Audience (Aud)
+	// The JWT must expire quickly (e.g., 5 minutes)
+	claims := FinalClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "https://dev.api.authnull.com/authentication",            // Your Issuer URL
+			Audience:  jwt.ClaimStrings{"0783e688-f709-412c-beb6-29129131a40e"}, // The client_id Entra ID sent you
+			ExpiresAt: jwt.NewNumericDate(now.Add(5 * time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			Subject:   base64.RawURLEncoding.EncodeToString(sub[:]),
+		},
+		Acr:               "possessionorinherence", // Standard value for strong MFA
+		Amr:               "fpt",                   // Fingerprint or other factor used by your platform
+		Nonce:             nonce,
+		PreferredUsername: username,
+	}
+
+	// 2. Create the Token with the RS256 signing method
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+
+	// Set the Key ID (KID) in the header so Entra ID knows which public key (from your JWKS) to use for verification
+	token.Header["kid"] = signingKid
+
+	// 3. Sign the Token using your private key
+	signedToken, err := token.SignedString(privateKey)
+	if err != nil {
+		log.Printf("FATAL: Failed to sign JWT: %v", err)
+		http.Error(w, "Internal token error", http.StatusInternalServerError)
+		return
+	}
+
+	// 4. Construct the Final POST Response (form_post)
+	// Entra ID requires a POST containing the id_token and state parameters.
+
+	// We must return a 200 OK HTML page with a self-submitting form.
+	// This is the OIDC 'form_post' response mode requirement.
+
+	formBody := fmt.Sprintf(`
+        <form method="POST" action="%s">
+            <input type="hidden" name="id_token" value="%s" />
+            <input type="hidden" name="state" value="%s" />
+        </form>
+        <script>document.forms[0].submit();</script>
+    `, redirectURI, signedToken, state)
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(formBody))
+	log.Printf("SUCCESS: Signed JWT and returning to Entra ID via form_post.")
 }
