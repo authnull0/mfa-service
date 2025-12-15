@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -29,6 +30,7 @@ import (
 	"github.com/crewjam/saml/samlidp"
 	"github.com/crewjam/saml/samlsp"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/okta/okta-sdk-golang/okta"
 )
 
@@ -43,6 +45,13 @@ type Jwk struct {
 
 type Jwks struct {
 	Keys []Jwk `json:"keys"`
+}
+
+// Define a custom struct to hold the claims you care about
+type EntraClaims struct {
+	jwt.RegisteredClaims
+	PreferredUsername string `json:"preferred_username"` // This holds the UPN/Email
+	Name              string `json:"name"`
 }
 
 // Define global variable to hold the generated JWK struct
@@ -1341,54 +1350,155 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 
 	var redirectURI, state, loginHint string
 
-	// 1. Handle POST: Parse the Form Body
-	if r.Method == "POST" {
-		if err := r.ParseForm(); err != nil {
-			log.Printf("FATAL: Error parsing POST form body: %v", err)
-			http.Error(w, "Error processing request data", http.StatusBadRequest)
-			return
-		}
-
-		// --- NEW DEBUGGING CODE START ---
-		log.Println("--- All Received POST Body Parameters ---")
-		// r.Form holds all parameters from the body
-		for key, values := range r.Form {
-			// Print the key and all associated values (though usually just one value per key for OIDC)
-			log.Printf("Key: %s, Value(s): %v", key, values)
-		}
-		log.Println("---------------------------------------")
-		// --- NEW DEBUGGING CODE END ---
-
-		// Read parameters from the parsed Form body
-		redirectURI = r.Form.Get("redirect_uri")
-		state = r.Form.Get("state")
-		loginHint = r.Form.Get("login_hint")
-
-	} else if r.Method == "GET" {
-		// Fallback for GET (reading from URL query)
-		query := r.URL.Query()
-		redirectURI = query.Get("redirect_uri")
-		state = query.Get("state")
-		loginHint = query.Get("login_hint")
-		// ... (You can add a similar loop here for GET if needed)
-
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	if err := r.ParseForm(); err != nil {
+		log.Printf("FATAL: Error parsing POST form body: %v", err)
+		http.Error(w, "Error processing request data", http.StatusBadRequest)
 		return
 	}
 
-	// Check for required parameters
-	if redirectURI == "" || state == "" {
+	// --- NEW DEBUGGING CODE START ---
+	log.Println("--- All Received POST Body Parameters ---")
+	// r.Form holds all parameters from the body
+	for key, values := range r.Form {
+		// Print the key and all associated values (though usually just one value per key for OIDC)
+		log.Printf("Key: %s, Value(s): %v", key, values)
+	}
+	log.Println("---------------------------------------")
+	// --- NEW DEBUGGING CODE END ---
+
+	// Read parameters from the parsed Form body
+	redirectURI = r.Form.Get("redirect_uri")
+	state = r.Form.Get("state")
+	loginHint = r.Form.Get("login_hint")
+
+	idTokenHint := r.Form.Get("id_token_hint")
+
+	if redirectURI == "" || state == "" || idTokenHint == "" {
 		log.Println("FATAL: Missing required OIDC parameters.")
 		http.Error(w, "Missing required OIDC parameters", http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("OIDC parameters successfully extracted. Redirect URI: %s", redirectURI)
+	// 1. Decode the ID Token Hint to get the Username
+	token, _, err := new(jwt.Parser).ParseUnverified(idTokenHint, &EntraClaims{})
+	if err != nil {
+		log.Printf("ERROR: Failed to decode id_token_hint: %v", err)
+		http.Error(w, "Invalid token hint", http.StatusBadRequest)
+		return
+	}
+
+	claims, ok := token.Claims.(*EntraClaims)
+	if !ok || claims.PreferredUsername == "" {
+		log.Println("ERROR: Could not parse claims or preferred_username is missing.")
+		http.Error(w, "User identity missing from token", http.StatusBadRequest)
+		return
+	}
+
+	username := claims.PreferredUsername
+
+	// 2. Determine Source IP (best effort, using RemoteAddr)
+	sourceIp := r.RemoteAddr
+	// Simple cleaning of port from remote address (e.g., 192.168.5.2:12345 -> 192.168.5.2)
+	if colon := bytes.LastIndexByte([]byte(sourceIp), ':'); colon != -1 {
+		sourceIp = sourceIp[:colon]
+	}
+
+	log.Printf("OIDC parameters successfully extracted. Redirect URI: %s %s", redirectURI, username)
 
 	// SUCCESS path (rest of your logic goes here)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(fmt.Sprintf("<html><body>OIDC flow received successfully for user %s. Next step: JWT Signing.</body></html>", loginHint)))
+
+	url := "https://dev.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
+
+	log.Default().Println("url:", url)
+
+	log.Default().Println("user:", username)
+
+	payload := map[string]interface{}{
+		"Username":       username,
+		"CredentialType": "PLATFORM",
+		"OrgId":          105,
+		"TenantId":       1,
+		"RequestId":      sourceIp,
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+
+	if err != nil {
+		log.Default().Println("Marshal Error:", err)
+		return
+	}
+
+	log.Default().Println("payload:", string(payloadBytes))
+
+	client := &http.Client{}
+
+	// Create a new request using http
+
+	req, err := http.NewRequest("POST", url, strings.NewReader(string(payloadBytes)))
+
+	if err != nil {
+		log.Default().Println("Create Request Error:", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request via a client
+
+	resp, err := client.Do(req)
+
+	if err != nil {
+		log.Default().Println("Client Error:", err)
+		return
+	}
+
+	// Callers should close resp.Body when done reading from it
+
+	defer resp.Body.Close()
+
+	// Check the response
+
+	if resp.StatusCode != http.StatusOK {
+
+		log.Default().Println("Response code Error:", err)
+		return
+	}
+
+	// Read the data from the response
+
+	body, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+
+		log.Default().Println("Read data Error:", err)
+		return
+	}
+
+	log.Default().Println("Response:", string(body))
+
+	var doAuthnResponse dto.DoAuthnResponse
+
+	err = json.Unmarshal(body, &doAuthnResponse)
+
+	if err != nil {
+
+		log.Default().Println("Error:", err)
+		return
+	}
+
+	if doAuthnResponse.Code != 200 {
+
+		log.Default().Println("Error:", err)
+		return
+	}
+
+	if !doAuthnResponse.IsValid {
+		log.Default().Println("Error:", err)
+		return
+	}
+
 }
 
 func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
