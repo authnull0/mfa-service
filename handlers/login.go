@@ -1596,12 +1596,12 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 			Issuer:    "https://dev.api.authnull.com", // Your Issuer URL
 			Audience:  jwt.ClaimStrings{clientID},     // The client_id Entra ID sent you
 			ExpiresAt: jwt.NewNumericDate(now.Add(5 * time.Minute)),
-			IssuedAt:  jwt.NewNumericDate(now),
-			NotBefore: jwt.NewNumericDate(now),
+			IssuedAt:  jwt.NewNumericDate(now.Add(-10 * time.Second)), // Prevent rejection due to clock skew
+			NotBefore: jwt.NewNumericDate(now.Add(-10 * time.Second)),
 			Subject:   base64.RawURLEncoding.EncodeToString(sub[:]),
 		},
-		Acr:               "possessionorinherence", // Standard value for strong MFA
-		Amr:               "fpt",                   // Fingerprint or other factor used by your platform
+		Acr:               "https://schemas.microsoft.com/claims/authnmethodsreferences/mfa", // <-- CRITICAL FIX, // Standard value for strong MFA
+		Amr:               "pop",                                                             // Fingerprint or other factor used by your platform
 		PreferredUsername: username,
 		Nonce:             nonce,
 	}
