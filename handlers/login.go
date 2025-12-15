@@ -1353,7 +1353,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Authorization Endpoint hit! Method: %s", r.Method)
 
-	var redirectURI, state, loginHint string
+	var redirectURI, state string
 
 	if err := r.ParseForm(); err != nil {
 		log.Printf("FATAL: Error parsing POST form body: %v", err)
@@ -1374,7 +1374,7 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 	// Read parameters from the parsed Form body
 	redirectURI = r.Form.Get("redirect_uri")
 	state = r.Form.Get("state")
-	loginHint = r.Form.Get("login_hint")
+	//loginHint = r.Form.Get("login_hint")
 	state = r.Form.Get("state")
 	nonce := r.Form.Get("nonce") // Needed for the final JWT claims
 	//clientID := r.Form.Get("client_id") // Needed for the 'aud' claim
@@ -1413,9 +1413,9 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 
 	log.Printf("OIDC parameters successfully extracted. Redirect URI: %s %s", redirectURI, username)
 
-	// SUCCESS path (rest of your logic goes here)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("<html><body>OIDC flow received successfully for user %s. Next step: JWT Signing.</body></html>", loginHint)))
+	// // SUCCESS path (rest of your logic goes here)
+	// w.WriteHeader(http.StatusOK)
+	// w.Write([]byte(fmt.Sprintf("<html><body>OIDC flow received successfully for user %s. Next step: JWT Signing.</body></html>", loginHint)))
 
 	url := "https://dev.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
 
@@ -1613,7 +1613,7 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 
 	// 2. Create the Token with the RS256 signing method
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-
+	log.Default().Printf("KID generated : %s", signingKid)
 	// Set the Key ID (KID) in the header so Entra ID knows which public key (from your JWKS) to use for verification
 	token.Header["kid"] = signingKid
 
