@@ -166,6 +166,8 @@ func Init() {
 	if err != nil {
 		panic(err) // TODO handle error
 	}
+	privateKey = keyPair.PrivateKey.(*rsa.PrivateKey)
+
 	keyPair.Leaf, err = x509.ParseCertificate(keyPair.Certificate[0])
 	if err != nil {
 		panic(err) // TODO handle error
@@ -237,6 +239,7 @@ func Init() {
 	}
 	log.Println("Loaded IdP EntityID:", samlSP.ServiceProvider.IDPMetadata.EntityID)
 	log.Println("OIDC Signing KID:", signingKid) // Log the KID for debugging and JWT header use!
+	log.Println("OIDC private key loaded:", privateKey != nil)
 
 }
 func (h *LoginHandler) FaviconHandler(c *gin.Context) {
@@ -1497,6 +1500,7 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 		log.Default().Println("Error:", err)
 		return
 	}
+	log.Default().Println("doAuthnResponse.IsValid:", doAuthnResponse.IsValid)
 
 	if !doAuthnResponse.IsValid {
 		log.Default().Println("Error:", err)
@@ -1600,6 +1604,11 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 		Amr:               "fpt",                   // Fingerprint or other factor used by your platform
 		Nonce:             nonce,
 		PreferredUsername: username,
+	}
+	if privateKey == nil {
+		log.Printf("FATAL: Private key not initialized. Init() failed?")
+		http.Error(w, "Internal token error", http.StatusInternalServerError)
+		return
 	}
 
 	// 2. Create the Token with the RS256 signing method
