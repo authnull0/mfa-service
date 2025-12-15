@@ -1418,9 +1418,9 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 	payload := map[string]interface{}{
 		"Username":       username,
 		"CredentialType": "PLATFORM",
-		"OrgId":          105,
+		"OrgId":          1,
 		"TenantId":       1,
-		"RequestId":      sourceIp,
+		"RequestId":      "",
 	}
 
 	payloadBytes, err := json.Marshal(payload)
