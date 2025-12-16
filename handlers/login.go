@@ -1515,7 +1515,7 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Metadata endpoint called by Entra")
 
 	// Define your Issuer URL base
-	issuerURL := "https://dev.api.authnull.com"
+	issuerURL := "https://dev.api.authnull.com/authentication"
 
 	// Construct the full metadata response
 	meta := dto.Metadata{
@@ -1596,8 +1596,8 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 	// The JWT must expire quickly (e.g., 5 minutes)
 	claims := FinalClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "https://dev.api.authnull.com", // Your Issuer URL
-			Audience:  jwt.ClaimStrings{clientID},     // The client_id Entra ID sent you
+			Issuer:    "https://dev.api.authnull.com/authentication", // Your Issuer URL
+			Audience:  jwt.ClaimStrings{clientID},                    // The client_id Entra ID sent you
 			ExpiresAt: jwt.NewNumericDate(now.Add(5 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(now.Add(-10 * time.Second)), // Prevent rejection due to clock skew
 			NotBefore: jwt.NewNumericDate(now.Add(-10 * time.Second)),
