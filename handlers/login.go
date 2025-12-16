@@ -1627,7 +1627,7 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 		http.Error(w, "Internal token error", http.StatusInternalServerError)
 		return
 	}
-
+	log.Default().Printf("Signed JWT: %s", signedToken)
 	// 4. Construct the Final POST Response (form_post)
 	// Entra ID requires a POST containing the id_token and state parameters.
 
