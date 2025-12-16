@@ -1521,8 +1521,8 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	meta := dto.Metadata{
 		// Standard OIDC Fields
 		Issuer:                           issuerURL,
-		AuthorizationEndpoint:            issuerURL + "/authentication/auth/external-mfa", // Your custom URL
-		JwksURI:                          issuerURL + "/authentication/oauth2/v1/keys",    // IMPORTANT: Must implement this keys endpoint
+		AuthorizationEndpoint:            issuerURL + "/auth/external-mfa", // Your custom URL
+		JwksURI:                          issuerURL + "/oauth2/v1/keys",    // IMPORTANT: Must implement this keys endpoint
 		ResponseTypesSupported:           []string{"id_token", "token"},
 		IdTokenSigningAlgValuesSupported: []string{"RS256"},
 		SubjectTypesSupported:            []string{"public"},
@@ -1531,7 +1531,7 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 		// Custom EAM Fields
 		Version:                "1.0.0",
 		AuthenticationMode:     "Synchronous",
-		AuthenticationEndpoint: issuerURL + "/authentication/auth/external-mfa",
+		AuthenticationEndpoint: issuerURL + "/auth/external-mfa",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1603,7 +1603,7 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 			NotBefore: jwt.NewNumericDate(now.Add(-10 * time.Second)),
 			Subject:   base64.RawURLEncoding.EncodeToString(sub[:]),
 		},
-		Acr:               "possessionorinherence",
+		Acr:               "https://schemas.microsoft.com/claims/authnmethodsreferences/mfa",
 		Amr:               "pop", // Fingerprint or other factor used by your platform
 		PreferredUsername: username,
 		Nonce:             nonce,
