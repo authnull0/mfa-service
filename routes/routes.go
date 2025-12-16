@@ -7,23 +7,22 @@ import (
 )
 
 func RegisterRoutes(router *gin.Engine, webAuthnHandler *handlers.WebAuthnHandler) {
-	base := router.Group("/")
-	{
-		entraHandler := handlers.NewLoginHandler()
-		// NEW — Entra EAM metadata endpoint
-		base.GET("/.well-known/openid-configuration", func(c *gin.Context) {
-			entraHandler.MetadataHandler(c.Writer, c.Request)
-		})
 
-		// NEW — Entra EAM dummy MFA endpoint
-		base.POST("/auth/external-mfa", func(ctx *gin.Context) {
-			entraHandler.ExternalMFAHandler(ctx.Writer, ctx.Request)
-		})
+	entraHandler := handlers.NewLoginHandler()
+	// NEW — Entra EAM metadata endpoint
+	router.GET("/.well-known/openid-configuration", func(c *gin.Context) {
+		entraHandler.MetadataHandler(c.Writer, c.Request)
+	})
 
-		base.GET("/oauth2/v1/keys", func(c *gin.Context) {
-			entraHandler.JwksHandler(c.Writer, c.Request)
-		})
-	}
+	// NEW — Entra EAM dummy MFA endpoint
+	router.POST("/auth/external-mfa", func(ctx *gin.Context) {
+		entraHandler.ExternalMFAHandler(ctx.Writer, ctx.Request)
+	})
+
+	router.GET("/oauth2/v1/keys", func(c *gin.Context) {
+		entraHandler.JwksHandler(c.Writer, c.Request)
+	})
+
 	api := router.Group("/authentication")
 	{
 		// Debug GET route for testing
