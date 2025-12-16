@@ -1603,8 +1603,8 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 			NotBefore: jwt.NewNumericDate(now.Add(-10 * time.Second)),
 			Subject:   base64.RawURLEncoding.EncodeToString(sub[:]),
 		},
-		Acr:               "https://schemas.microsoft.com/claims/authnmethodsreferences/mfa", // <-- CRITICAL FIX, // Standard value for strong MFA
-		Amr:               "pop",                                                             // Fingerprint or other factor used by your platform
+		Acr:               "possessionorinherence",
+		Amr:               "pop", // Fingerprint or other factor used by your platform
 		PreferredUsername: username,
 		Nonce:             nonce,
 	}
