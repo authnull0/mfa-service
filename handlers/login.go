@@ -54,6 +54,7 @@ type EntraClaims struct {
 	jwt.RegisteredClaims
 	PreferredUsername string `json:"preferred_username"` // This holds the UPN/Email
 	Name              string `json:"name"`
+	Sub               string `json:"sub"`
 }
 
 // Define global variable to hold the generated JWK struct
@@ -1412,7 +1413,13 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	username := claims.PreferredUsername
-
+	sub := claims.Sub
+	if sub == "" {
+		log.Println("FATAL: id_token_hint missing sub")
+		http.Error(w, "Invalid id_token_hint: missing sub", http.StatusBadRequest)
+		return
+	}
+	log.Default().Printf("Entra Subject : %s", sub)
 	// 2. Determine Source IP (best effort, using RemoteAddr)
 	sourceIp := r.RemoteAddr
 	// Simple cleaning of port from remote address (e.g., 192.168.5.2:12345 -> 192.168.5.2)
@@ -1515,7 +1522,7 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 		log.Default().Println("Error:", err)
 		return
 	} else if doAuthnResponse.IsValid {
-		SignAndPostJWT(w, r, username, redirectURI, state, nonce, clientID)
+		SignAndPostJWT(w, r, username, redirectURI, state, nonce, clientID, sub)
 	}
 }
 
@@ -1582,23 +1589,23 @@ func base64UrlEncodeBytes(b []byte) string {
 type FinalClaims struct {
 	jwt.RegisteredClaims
 	// Mandatory Claims for OIDC:
-	Sub   string `json:"sub"`   // Subject (user identifier)
-	Acr   string `json:"acr"`   // Authentication Context Class Reference (MFA success)
-	Amr   string `json:"amr"`   // Authentication Methods Reference (MFA methods used)
-	Nonce string `json:"nonce"` // Passed from the original client request (Optional, but good practice)
+	Sub   string   `json:"sub"`   // Subject (user identifier)
+	Acr   string   `json:"acr"`   // Authentication Context Class Reference (MFA success)
+	Amr   []string `json:"amr"`   // Authentication Methods Reference (MFA methods used)
+	Nonce string   `json:"nonce"` // Passed from the original client request (Optional, but good practice)
 
 	// Additional claims based on the original token's user info:
 	PreferredUsername string `json:"preferred_username,omitempty"`
 	TID               string `json:"tid,omitempty"`
 }
 
-func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectURI, state, nonce string, clientID string) {
+func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectURI, state, nonce string, clientID string, sub string) {
 	now := time.Now()
 
 	// Get the User's Subject (sub) from the username
 	// Note: In a real app, you should use the 'sub' from the id_token_hint for consistency.
 	// For simplicity, we derive it from the username here.
-	sub := sha256.Sum256([]byte(username))
+	// sub := sha256.Sum256([]byte(username))
 
 	// 1. Define Expiration, Issuer, and Audience (Aud)
 	// The JWT must expire quickly (e.g., 5 minutes)
@@ -1609,10 +1616,10 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 			ExpiresAt: jwt.NewNumericDate(now.Add(5 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(now.Add(-10 * time.Second)), // Prevent rejection due to clock skew
 			NotBefore: jwt.NewNumericDate(now.Add(-10 * time.Second)),
-			Subject:   base64.RawURLEncoding.EncodeToString(sub[:]),
+			Subject:   sub,
 		},
 		Acr:               "https://schemas.microsoft.com/claims/authnmethodsreferences/mfa",
-		Amr:               "pop", // Fingerprint or other factor used by your platform
+		Amr:               []string{"pop"}, // Fingerprint or other factor used by your platform
 		PreferredUsername: username,
 		Nonce:             nonce,
 	}
