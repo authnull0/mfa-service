@@ -1589,7 +1589,7 @@ func base64UrlEncodeBytes(b []byte) string {
 type FinalClaims struct {
 	jwt.RegisteredClaims
 	// Mandatory Claims for OIDC:
-	Sub   string   `json:"sub"`   // Subject (user identifier)
+	//Sub   string   `json:"sub"`   // Subject (user identifier)
 	Acr   string   `json:"acr"`   // Authentication Context Class Reference (MFA success)
 	Amr   []string `json:"amr"`   // Authentication Methods Reference (MFA methods used)
 	Nonce string   `json:"nonce"` // Passed from the original client request (Optional, but good practice)
