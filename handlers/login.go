@@ -1590,9 +1590,9 @@ type FinalClaims struct {
 	jwt.RegisteredClaims
 	// Mandatory Claims for OIDC:
 	//Sub   string   `json:"sub"`   // Subject (user identifier)
-	Acr   string   `json:"acr"`           // Authentication Context Class Reference (MFA success)
-	Amr   []string `json:"amr",omitempty` // Authentication Methods Reference (MFA methods used)
-	Nonce string   `json:"nonce"`         // Passed from the original client request (Optional, but good practice)
+	Acr   string `json:"acr"`   // Authentication Context Class Reference (MFA success)
+	Amr   string `json:"amr"`   // Authentication Methods Reference (MFA methods used)
+	Nonce string `json:"nonce"` // Passed from the original client request (Optional, but good practice)
 
 	// Additional claims based on the original token's user info:
 	PreferredUsername string `json:"preferred_username,omitempty"`
@@ -1618,8 +1618,8 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 			NotBefore: jwt.NewNumericDate(now.Add(-10 * time.Second)),
 			Subject:   sub,
 		},
-		Acr: "urn:schemas:Microsoft:authenticationmethod:external",
-		//Amr:               []string{"mfa"}, // Fingerprint, otp or other factor used by your platform
+		Acr:               "urn:schemas:Microsoft:authenticationmethod:external",
+		Amr:               "mfa", // Fingerprint, otp or other factor used by your platform
 		PreferredUsername: username,
 		Nonce:             nonce,
 	}
