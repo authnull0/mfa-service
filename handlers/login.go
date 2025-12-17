@@ -1619,7 +1619,7 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 			Subject:   sub,
 		},
 		Acr:               "urn:schemas:Microsoft:authenticationmethod:external",
-		Amr:               "mfa", // Fingerprint, otp or other factor used by your platform
+		Amr:               "otp", // Fingerprint, otp or other factor used by your platform
 		PreferredUsername: username,
 		Nonce:             nonce,
 	}
