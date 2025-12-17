@@ -1618,8 +1618,8 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 			NotBefore: jwt.NewNumericDate(now.Add(-10 * time.Second)),
 			Subject:   sub,
 		},
-		Acr:               "https://schemas.microsoft.com/claims/authnmethodsreferences/mfa",
-		Amr:               []string{"pop"}, // Fingerprint or other factor used by your platform
+		Acr:               "urn:schemas:Microsoft:authenticationmethod:external",
+		Amr:               []string{"mfa"}, // Fingerprint or other factor used by your platform
 		PreferredUsername: username,
 		Nonce:             nonce,
 	}
