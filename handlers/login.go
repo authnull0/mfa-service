@@ -191,6 +191,10 @@ func Init() {
 		panic("Certificate public key is not an RSA key")
 	}
 
+	if pubKey.N.Cmp(privateKey.N) != 0 {
+		panic("certificate public key does not match private key")
+	}
+
 	// 1. Generate a Key ID (KID) - Using a hash of the public key's DER encoding is common practice
 	hasher := sha256.New()
 	hasher.Write(keyPair.Leaf.RawSubjectPublicKeyInfo)
