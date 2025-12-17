@@ -1618,10 +1618,10 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 			NotBefore: jwt.NewNumericDate(now.Add(-10 * time.Second)),
 			Subject:   sub,
 		},
-		Acr:               "urn:schemas:Microsoft:authenticationmethod:external",
-		Amr:               []string{"pwd", "mfa"},
-		PreferredUsername: username,
-		Nonce:             nonce,
+		Acr: "urn:schemas:Microsoft:authenticationmethod:external",
+		Amr: []string{"mfa"},
+		//PreferredUsername: username,
+		Nonce: nonce,
 	}
 	if privateKey == nil {
 		log.Printf("FATAL: Private key not initialized. Init() failed?")
