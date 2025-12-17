@@ -1606,7 +1606,7 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 	// Note: In a real app, you should use the 'sub' from the id_token_hint for consistency.
 	// For simplicity, we derive it from the username here.
 	// sub := sha256.Sum256([]byte(username))
-
+	log.Default().Printf("Received Entra Subject : %v", sub)
 	// 1. Define Expiration, Issuer, and Audience (Aud)
 	// The JWT must expire quickly (e.g., 5 minutes)
 	claims := FinalClaims{
