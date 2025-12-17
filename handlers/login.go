@@ -36,11 +36,13 @@ import (
 
 // Jwk and Jwks structs remain the same as defined previously
 type Jwk struct {
-	Kty string `json:"kty"`
-	Kid string `json:"kid"`
-	Use string `json:"use"`
-	N   string `json:"n"`
-	E   string `json:"e"`
+	Kty string   `json:"kty"`
+	Kid string   `json:"kid"`
+	Alg string   `json:"alg"`
+	Use string   `json:"use"`
+	N   string   `json:"n"`
+	E   string   `json:"e"`
+	X5c []string `json:"x5c,omitempty"`
 }
 
 type Jwks struct {
@@ -172,6 +174,11 @@ func Init() {
 	if err != nil {
 		panic(err) // TODO handle error
 	}
+	// 3. Encode certificate for x5c (BASE64, NOT URL BASE64)
+	x5c := []string{
+		base64.StdEncoding.EncodeToString(keyPair.Leaf.Raw),
+	}
+	log.Default().Printf("X5c : %s", x5c[0])
 
 	idpMetadataURL, err := url.Parse(idpMetadataURLstr)
 	if err != nil {
@@ -189,18 +196,15 @@ func Init() {
 	hasher.Write(keyPair.Leaf.RawSubjectPublicKeyInfo)
 	signingKid = base64.RawURLEncoding.EncodeToString(hasher.Sum(nil)[:10])
 
-	// 2. Extract Modulus (N) and Exponent (E)
-	n := base64UrlEncode(pubKey.N)
-	// E = Public Exponent (Base64 URL-safe encoded)
-	e := base64UrlEncode(big.NewInt(int64(pubKey.E)))
-
 	// 3. Populate the global publicJWK struct
 	publicJWK = &Jwk{
 		Kty: "RSA",
 		Kid: signingKid,
 		Use: "sig",
-		N:   n,
-		E:   e,
+		Alg: "RS256",
+		N:   base64UrlEncodeBytes(pubKey.N.Bytes()),
+		E:   base64UrlEncodeBytes(big.NewInt(int64(pubKey.E)).Bytes()),
+		X5c: x5c,
 	}
 	log.Printf("DEBUG: Populated Public JWK: %+v", publicJWK)
 
@@ -1545,9 +1549,8 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 
 // Remember to register this handler on the path specified in your OIDC metadata (e.g., /oauth2/v1/keys)
 func (h *LoginHandler) JwksHandler(w http.ResponseWriter, r *http.Request) {
-	log.Default().Printf("Public Key : %+v ", publicJWK)
 	if publicJWK == nil {
-		log.Println("Error: JWKS not initialized. Init() failed?")
+		log.Println("ERROR: JWKS not initialized")
 		http.Error(w, "JWKS not initialized", http.StatusInternalServerError)
 		return
 	}
@@ -1555,20 +1558,21 @@ func (h *LoginHandler) JwksHandler(w http.ResponseWriter, r *http.Request) {
 	jwks := Jwks{
 		Keys: []Jwk{*publicJWK},
 	}
-	log.Printf("DEBUG: Populated JWKS: %+v", jwks)
+
+	log.Printf("JWKS served: kid=%s", publicJWK.Kid)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 
 	if err := json.NewEncoder(w).Encode(jwks); err != nil {
-		log.Println("Error encoding JWKS:", err)
+		log.Println("JWKS encode error:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }
 
-// Custom Base64 URL-safe encoder function (needed for N and E)
-func base64UrlEncode(b *big.Int) string {
-	return base64.RawURLEncoding.EncodeToString(b.Bytes())
+// Helper function for Base64 URL-safe encoding without padding
+func base64UrlEncodeBytes(b []byte) string {
+	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 type FinalClaims struct {
