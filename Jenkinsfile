@@ -3,10 +3,10 @@ pipeline {
 
     environment {
         GITHUB_REPO = 'https://github.com/authnull0/mfa-service.git'
-        GITHUB_BRANCH = 'development-test'
+        GITHUB_BRANCH = 'production-az'
         DOCKER_REGISTRY = 'docker-repo.authnull.com'
         DOCKER_REGISTRY_CREDENTIALS = credentials('authnull-repo')
-        DOCKER_IMAGE = 'docker-repo.authnull.com/mfa-service:latest'
+        DOCKER_IMAGE = 'docker-repo.authnull.com/mfa-service:production'
         AZURE_CLIENT_ID = credentials('clientid')  
         AZURE_CLIENT_SECRET = credentials('secretid') 
         AZURE_TENANT_ID = credentials('tenantid')
