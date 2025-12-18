@@ -1618,8 +1618,8 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 			NotBefore: jwt.NewNumericDate(now.Add(-10 * time.Second)),
 			Subject:   sub,
 		},
-		Acr: "urn:schemas:Microsoft:authenticationmethod:external",
-		Amr: []string{"mfa"},
+		Acr: "possessionorinherence",
+		Amr: []string{"pop"},
 		//PreferredUsername: username,
 		Nonce: nonce,
 	}
