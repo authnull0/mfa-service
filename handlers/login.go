@@ -642,7 +642,7 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 		}
 		//c.JSON(http.StatusOK, handleSamlResponse)
 		//return
-		authnullLogoutUrl := "https://default.devsetup.dev.authnull.com/custom/Logout"
+		authnullLogoutUrl := "https://default.devsetup.prod.authnull.com/custom/Logout"
 		log.Default().Println("Redirecting to Authnull Logout URL:", authnullLogoutUrl)
 
 		c.Redirect(http.StatusFound, authnullLogoutUrl)
@@ -792,7 +792,7 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 		redirectParams.Set("userName", nameId)
 		redirectParams.Set("first_login", "1")
 		redirectParams.Set("token", session.ID) // or your actual token
-		redirectParams.Set("url", fmt.Sprintf("%s.%s.dev.authnull.com", tenantName, orgName))
+		redirectParams.Set("url", fmt.Sprintf("%s.%s.prod.authnull.com", tenantName, orgName))
 
 		finalRedirectURL := fmt.Sprintf(
 			"https://ssc.authnull.com/ssc/signin?%s",
@@ -1199,7 +1199,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 	//make a call to the sso mfa endpoint
 
 	//url := os.Getenv("DO_AUTHNV4")
-	url := "https://dev.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
+	url := "https://prod.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
 
 	log.Default().Println("url:", url)
 
@@ -1433,7 +1433,7 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 	// w.WriteHeader(http.StatusOK)
 	// w.Write([]byte(fmt.Sprintf("<html><body>OIDC flow received successfully for user %s. Next step: JWT Signing.</body></html>", loginHint)))
 
-	url := "https://dev.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
+	url := "https://prod.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
 
 	log.Default().Println("url:", url)
 
@@ -1530,7 +1530,7 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Metadata endpoint called by Entra")
 
 	// Define your Issuer URL base
-	issuerURL := "https://dev.api.authnull.com/authentication"
+	issuerURL := "https://prod.api.authnull.com/authentication"
 
 	// Construct the full metadata response
 	meta := dto.Metadata{
@@ -1611,8 +1611,8 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 	// The JWT must expire quickly (e.g., 5 minutes)
 	claims := FinalClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "https://dev.api.authnull.com/authentication", // Your Issuer URL
-			Audience:  jwt.ClaimStrings{clientID},                    // The client_id Entra ID sent you
+			Issuer:    "https://prod.api.authnull.com/authentication", // Your Issuer URL
+			Audience:  jwt.ClaimStrings{clientID},                     // The client_id Entra ID sent you
 			ExpiresAt: jwt.NewNumericDate(now.Add(5 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(now.Add(-10 * time.Second)), // Prevent rejection due to clock skew
 			NotBefore: jwt.NewNumericDate(now.Add(-10 * time.Second)),

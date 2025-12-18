@@ -86,7 +86,7 @@ func (h *DecentralizedHandler) BeginRegisterWallet(c *gin.Context) {
 		log.Default().Printf("Using wallet key: %s", walletKey)
 		client := &http.Client{}
 		// url := os.Getenv("WALLET_SERVICE") + "/api/v1/walletService/registerDevice"
-		url := "https://dev.api.authnull.com/api/v1/walletService/createWallet"
+		url := "https://prod.api.authnull.com/api/v1/walletService/createWallet"
 		log.Default().Printf("Wallet service URL: %s", url)
 		payload := map[string]interface{}{
 			"email":     req.Email,
