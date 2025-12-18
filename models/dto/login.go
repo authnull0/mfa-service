@@ -68,3 +68,34 @@ type DoAuthnResponse struct {
 	SsoUrl    string `json:"ssoUrl"`
 	Stage     int    `json:"stage"`
 }
+type EntraAuthRequest struct {
+	Version       string `json:"version"`
+	RequestID     string `json:"requestId"`
+	Username      string `json:"username"`
+	ClientApp     string `json:"clientApp"`
+	TransactionID string `json:"transactionId"`
+}
+
+type EntraAuthResponse struct {
+	Authenticated bool   `json:"authenticated"`
+	ErrorMessage  string `json:"errorMessage,omitempty"`
+}
+
+// ---------------------------
+// Metadata (required by Entra)
+// ---------------------------
+type Metadata struct {
+	// Standard OIDC Required Fields
+	Issuer                           string   `json:"issuer"`                                // REQUIRED: The URL of your service.
+	AuthorizationEndpoint            string   `json:"authorization_endpoint"`                // REQUIRED: The URL Entra ID redirects the user to for authentication.
+	JwksURI                          string   `json:"jwks_uri"`                              // REQUIRED: Where Entra ID finds your public keys for signature validation.
+	ResponseTypesSupported           []string `json:"response_types_supported"`              // REQUIRED: Must include "id_token" for EAM.
+	IdTokenSigningAlgValuesSupported []string `json:"id_token_signing_alg_values_supported"` // REQUIRED: Must include "RS256".
+	SubjectTypesSupported            []string `json:"subject_types_supported"`               // REQUIRED: Must include "public".
+	ScopesSupported                  []string `json:"scopes_supported,omitempty"`            // Optional, but usually "openid" is included.
+
+	// Custom EAM Fields
+	Version                string `json:"version"`                // EAM-specific
+	AuthenticationMode     string `json:"authenticationMode"`     // EAM-specific: "Synchronous"
+	AuthenticationEndpoint string `json:"authenticationEndpoint"` // EAM-specific: Your POST endpoint URL.
+}

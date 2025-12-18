@@ -63,14 +63,14 @@ func OnboardUser(orgName string, tenantName string, nameID string, audience stri
 
 const (
 	entityID = "https://www.okta.com/exkd34w6nxTiIRwaW5d7"
-	acsURL   = "https://dev.api.authnull.com/authentication/saml/callback"
-	// idpSSOURL         = "https://api-dev.platform.outsourcingit.com/auth/v1/saml/protocol/saml/auth/EMAPTA/AUTHNULL"
-	idpSSOURL  = "https://api-dev.platform.outsourcingit.com/auth/v1/saml/protocol/saml/auth/EMAPTA/AUTHNULL"
-	relayState = "https://dev.api.authnull.com/authentication/saml/callback"
-	// logoutURL         = "https://api-dev.platform.outsourcingit.com/auth/v1/saml/protocol/saml/auth/EMAPTA/AUTHNULL/logout"
-	logoutURL         = "https://api-dev.platform.outsourcingit.com/auth/v1/saml/protocol/saml/auth/EMAPTA/AUTHNULL/logout"
+	acsURL   = "https://prod.api.authnull.com/authentication/saml/callback"
+	// idpSSOURL         = "https://api-prod.platform.outsourcingit.com/auth/v1/saml/protocol/saml/auth/EMAPTA/AUTHNULL"
+	idpSSOURL  = "https://api-prod.platform.outsourcingit.com/auth/v1/saml/protocol/saml/auth/EMAPTA/AUTHNULL"
+	relayState = "https://prod.api.authnull.com/authentication/saml/callback"
+	// logoutURL         = "https://api-prod.platform.outsourcingit.com/auth/v1/saml/protocol/saml/auth/EMAPTA/AUTHNULL/logout"
+	logoutURL         = "https://api-prod.platform.outsourcingit.com/auth/v1/saml/protocol/saml/auth/EMAPTA/AUTHNULL/logout"
 	oktaLogoutURL     = "https://trial-1308598.okta.com/app/trial-1308598_mytestapp_1/exkr6z8gpiLD0dI8S697/slo/saml"
-	authnullLogoutURL = "https://default.devsetup.dev.authnull.com/custom/Logout"
+	authnullLogoutURL = "https://default.devsetup.prod.authnull.com/custom/Logout"
 )
 
 // Build minimal LogoutRequest XML

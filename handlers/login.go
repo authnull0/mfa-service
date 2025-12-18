@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -12,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -27,8 +30,36 @@ import (
 	"github.com/crewjam/saml/samlidp"
 	"github.com/crewjam/saml/samlsp"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/okta/okta-sdk-golang/okta"
 )
+
+// Jwk and Jwks structs remain the same as defined previously
+type Jwk struct {
+	Kty string   `json:"kty"`
+	Kid string   `json:"kid"`
+	Alg string   `json:"alg"`
+	Use string   `json:"use"`
+	N   string   `json:"n"`
+	E   string   `json:"e"`
+	X5c []string `json:"x5c,omitempty"`
+}
+
+type Jwks struct {
+	Keys []Jwk `json:"keys"`
+}
+
+// Define a custom struct to hold the claims you care about
+type EntraClaims struct {
+	jwt.RegisteredClaims
+	PreferredUsername string `json:"preferred_username"` // This holds the UPN/Email
+	Name              string `json:"name"`
+	Sub               string `json:"sub"`
+}
+
+// Define global variable to hold the generated JWK struct
+var publicJWK *Jwk
+var signingKid string
 
 type LoginHandler struct {
 	Service *services.LoginService
@@ -124,6 +155,8 @@ var storage samlidp.MemoryStore
 
 var keyPair tls.Certificate
 
+var privateKey *rsa.PrivateKey
+
 func Init() {
 
 	//rootURLstr = os.Getenv("ROOT_URL")
@@ -136,15 +169,49 @@ func Init() {
 	if err != nil {
 		panic(err) // TODO handle error
 	}
+	privateKey = keyPair.PrivateKey.(*rsa.PrivateKey)
+
 	keyPair.Leaf, err = x509.ParseCertificate(keyPair.Certificate[0])
 	if err != nil {
 		panic(err) // TODO handle error
 	}
+	// 3. Encode certificate for x5c (BASE64, NOT URL BASE64)
+	x5c := []string{
+		base64.StdEncoding.EncodeToString(keyPair.Leaf.Raw),
+	}
+	log.Default().Printf("X5c : %s", x5c[0])
 
 	idpMetadataURL, err := url.Parse(idpMetadataURLstr)
 	if err != nil {
 		panic(err) // TODO handle error
 	}
+
+	// --- NEW: Extract Public Key Components for OIDC/JWKS ---
+	pubKey, ok := keyPair.Leaf.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		panic("Certificate public key is not an RSA key")
+	}
+
+	if pubKey.N.Cmp(privateKey.N) != 0 {
+		panic("certificate public key does not match private key")
+	}
+
+	// 1. Generate a Key ID (KID) - Using a hash of the public key's DER encoding is common practice
+	hasher := sha256.New()
+	hasher.Write(keyPair.Leaf.RawSubjectPublicKeyInfo)
+	signingKid = base64.RawURLEncoding.EncodeToString(hasher.Sum(nil)[:10])
+
+	// 3. Populate the global publicJWK struct
+	publicJWK = &Jwk{
+		Kty: "RSA",
+		Kid: signingKid,
+		Use: "sig",
+		Alg: "RS256",
+		N:   base64UrlEncodeBytes(pubKey.N.Bytes()),
+		E:   base64UrlEncodeBytes(big.NewInt(int64(pubKey.E)).Bytes()),
+		X5c: x5c,
+	}
+	log.Printf("DEBUG: Populated Public JWK: %+v", publicJWK)
 
 	rootURL, err := url.Parse(rootURLstr)
 	if err != nil {
@@ -181,6 +248,8 @@ func Init() {
 		panic(err) // TODO handle error
 	}
 	log.Println("Loaded IdP EntityID:", samlSP.ServiceProvider.IDPMetadata.EntityID)
+	log.Println("OIDC Signing KID:", signingKid) // Log the KID for debugging and JWT header use!
+	log.Println("OIDC private key loaded:", privateKey != nil)
 
 }
 func (h *LoginHandler) FaviconHandler(c *gin.Context) {
@@ -216,7 +285,7 @@ func (h *LoginHandler) HandleNormalLogin(c *gin.Context) {
 	if err := db1.Where("email_address = ?", normalLoginRequest.Username).First(&user).Error; err != nil {
 		log.Default().Println("Error:", err)
 		normalLoginResponse.Code = 500
-		normalLoginResponse.Message = "Error"
+		normalLoginResponse.Message = "Invalid Username"
 		normalLoginResponse.Status = "error"
 		normalLoginResponse.FirstLogin = user.FirstLogin
 		c.JSON(http.StatusInternalServerError, normalLoginResponse)
@@ -573,7 +642,7 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 		}
 		//c.JSON(http.StatusOK, handleSamlResponse)
 		//return
-		authnullLogoutUrl := "https://default.devsetup.dev.authnull.com/custom/Logout"
+		authnullLogoutUrl := "https://default.devsetup.prod.authnull.com/custom/Logout"
 		log.Default().Println("Redirecting to Authnull Logout URL:", authnullLogoutUrl)
 
 		c.Redirect(http.StatusFound, authnullLogoutUrl)
@@ -723,7 +792,7 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 		redirectParams.Set("userName", nameId)
 		redirectParams.Set("first_login", "1")
 		redirectParams.Set("token", session.ID) // or your actual token
-		redirectParams.Set("url", fmt.Sprintf("%s.%s.dev.authnull.com", tenantName, orgName))
+		redirectParams.Set("url", fmt.Sprintf("%s.%s.prod.authnull.com", tenantName, orgName))
 
 		finalRedirectURL := fmt.Sprintf(
 			"https://ssc.authnull.com/ssc/signin?%s",
@@ -1130,7 +1199,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 	//make a call to the sso mfa endpoint
 
 	//url := os.Getenv("DO_AUTHNV4")
-	url := "https://dev.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
+	url := "https://prod.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
 
 	log.Default().Println("url:", url)
 
@@ -1287,4 +1356,309 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 
 	c.JSON(http.StatusOK, ssoMfaResponse)
 
+}
+
+// This handler must be correctly registered for the GET method.
+// NOTE: I am renaming the function to reflect its role as the initial Authorization Endpoint.
+func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Authorization Endpoint hit! Method: %s", r.Method)
+
+	var redirectURI, state string
+
+	if err := r.ParseForm(); err != nil {
+		log.Printf("FATAL: Error parsing POST form body: %v", err)
+		http.Error(w, "Error processing request data", http.StatusBadRequest)
+		return
+	}
+
+	// --- NEW DEBUGGING CODE START ---
+	log.Println("--- All Received POST Body Parameters ---")
+	// r.Form holds all parameters from the body
+	for key, values := range r.Form {
+		// Print the key and all associated values (though usually just one value per key for OIDC)
+		log.Printf("Key: %s, Value(s): %v", key, values)
+	}
+	log.Println("---------------------------------------")
+	// --- NEW DEBUGGING CODE END ---
+
+	// Read parameters from the parsed Form body
+	redirectURI = r.Form.Get("redirect_uri")
+	state = r.Form.Get("state")
+	//loginHint = r.Form.Get("login_hint")
+	state = r.Form.Get("state")
+	nonce := r.Form.Get("nonce")        // Needed for the final JWT claims
+	clientID := r.Form.Get("client_id") // Needed for the 'aud' claim
+
+	idTokenHint := r.Form.Get("id_token_hint")
+
+	if redirectURI == "" || state == "" || idTokenHint == "" {
+		log.Println("FATAL: Missing required OIDC parameters.")
+		http.Error(w, "Missing required OIDC parameters", http.StatusBadRequest)
+		return
+	}
+
+	// 1. Decode the ID Token Hint to get the Username
+	token, _, err := new(jwt.Parser).ParseUnverified(idTokenHint, &EntraClaims{})
+	if err != nil {
+		log.Printf("ERROR: Failed to decode id_token_hint: %v", err)
+		http.Error(w, "Invalid token hint", http.StatusBadRequest)
+		return
+	}
+
+	claims, ok := token.Claims.(*EntraClaims)
+	if !ok || claims.PreferredUsername == "" {
+		log.Println("ERROR: Could not parse claims or preferred_username is missing.")
+		http.Error(w, "User identity missing from token", http.StatusBadRequest)
+		return
+	}
+
+	username := claims.PreferredUsername
+	sub := claims.Sub
+	if sub == "" {
+		log.Println("FATAL: id_token_hint missing sub")
+		http.Error(w, "Invalid id_token_hint: missing sub", http.StatusBadRequest)
+		return
+	}
+	log.Default().Printf("Entra Subject : %s", sub)
+	// 2. Determine Source IP (best effort, using RemoteAddr)
+	sourceIp := r.RemoteAddr
+	// Simple cleaning of port from remote address (e.g., 192.168.5.2:12345 -> 192.168.5.2)
+	if colon := bytes.LastIndexByte([]byte(sourceIp), ':'); colon != -1 {
+		sourceIp = sourceIp[:colon]
+	}
+
+	log.Printf("OIDC parameters successfully extracted. Redirect URI: %s %s", redirectURI, username)
+
+	// // SUCCESS path (rest of your logic goes here)
+	// w.WriteHeader(http.StatusOK)
+	// w.Write([]byte(fmt.Sprintf("<html><body>OIDC flow received successfully for user %s. Next step: JWT Signing.</body></html>", loginHint)))
+
+	url := "https://prod.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
+
+	log.Default().Println("url:", url)
+
+	log.Default().Println("user:", username)
+
+	payload := map[string]interface{}{
+		"Username":       username,
+		"CredentialType": "PLATFORM",
+		"OrgId":          1,
+		"TenantId":       1,
+		"RequestId":      "",
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+
+	if err != nil {
+		log.Default().Println("Marshal Error:", err)
+		return
+	}
+
+	log.Default().Println("payload:", string(payloadBytes))
+
+	client := &http.Client{}
+
+	// Create a new request using http
+
+	req, err := http.NewRequest("POST", url, strings.NewReader(string(payloadBytes)))
+
+	if err != nil {
+		log.Default().Println("Create Request Error:", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request via a client
+
+	resp, err := client.Do(req)
+
+	if err != nil {
+		log.Default().Println("Client Error:", err)
+		return
+	}
+
+	// Callers should close resp.Body when done reading from it
+
+	defer resp.Body.Close()
+
+	// Check the response
+
+	if resp.StatusCode != http.StatusOK {
+
+		log.Default().Println("Response code Error:", err)
+		return
+	}
+
+	// Read the data from the response
+
+	body, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+
+		log.Default().Println("Read data Error:", err)
+		return
+	}
+
+	log.Default().Println("Response:", string(body))
+
+	var doAuthnResponse dto.DoAuthnResponse
+
+	err = json.Unmarshal(body, &doAuthnResponse)
+	if err != nil {
+
+		log.Default().Println("Error:", err)
+		return
+	}
+
+	if doAuthnResponse.Code != 200 {
+
+		log.Default().Println("Error:", err)
+		return
+	}
+	log.Default().Println("doAuthnResponse.IsValid:", doAuthnResponse.IsValid)
+
+	if !doAuthnResponse.IsValid {
+		log.Default().Println("Error:", err)
+		return
+	} else if doAuthnResponse.IsValid {
+		SignAndPostJWT(w, r, username, redirectURI, state, nonce, clientID, sub)
+	}
+}
+
+func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Metadata endpoint called by Entra")
+
+	// Define your Issuer URL base
+	issuerURL := "https://prod.api.authnull.com/authentication"
+
+	// Construct the full metadata response
+	meta := dto.Metadata{
+		// Standard OIDC Fields
+		Issuer:                           issuerURL,
+		AuthorizationEndpoint:            issuerURL + "/auth/external-mfa", // Your custom URL
+		JwksURI:                          issuerURL + "/oauth2/v1/keys",    // IMPORTANT: Must implement this keys endpoint
+		ResponseTypesSupported:           []string{"id_token", "token"},
+		IdTokenSigningAlgValuesSupported: []string{"RS256"},
+		SubjectTypesSupported:            []string{"public"},
+		ScopesSupported:                  []string{"openid", "profile"},
+
+		// Custom EAM Fields
+		Version:                "1.0.0",
+		AuthenticationMode:     "Synchronous",
+		AuthenticationEndpoint: issuerURL + "/auth/external-mfa",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(meta); err != nil {
+		log.Println("Error encoding metadata:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+	log.Default().Printf("Response Metadata: %+v", meta)
+
+}
+
+// Remember to register this handler on the path specified in your OIDC metadata (e.g., /oauth2/v1/keys)
+func (h *LoginHandler) JwksHandler(w http.ResponseWriter, r *http.Request) {
+	if publicJWK == nil {
+		log.Println("ERROR: JWKS not initialized")
+		http.Error(w, "JWKS not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	jwks := Jwks{
+		Keys: []Jwk{*publicJWK},
+	}
+
+	log.Printf("JWKS served: kid=%s", publicJWK.Kid)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+
+	if err := json.NewEncoder(w).Encode(jwks); err != nil {
+		log.Println("JWKS encode error:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// Helper function for Base64 URL-safe encoding without padding
+func base64UrlEncodeBytes(b []byte) string {
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+type FinalClaims struct {
+	jwt.RegisteredClaims
+	// Mandatory Claims for OIDC:
+	//Sub   string   `json:"sub"`   // Subject (user identifier)
+	Acr   string   `json:"acr"`   // Authentication Context Class Reference (MFA success)
+	Amr   []string `json:"amr"`   // Authentication Methods Reference (MFA methods used)
+	Nonce string   `json:"nonce"` // Passed from the original client request (Optional, but good practice)
+
+	// Additional claims based on the original token's user info:
+	PreferredUsername string `json:"preferred_username,omitempty"`
+	TID               string `json:"tid,omitempty"`
+}
+
+func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectURI, state, nonce string, clientID string, sub string) {
+	now := time.Now()
+
+	// Get the User's Subject (sub) from the username
+	// Note: In a real app, you should use the 'sub' from the id_token_hint for consistency.
+	// For simplicity, we derive it from the username here.
+	// sub := sha256.Sum256([]byte(username))
+	log.Default().Printf("Received Entra Subject : %v", sub)
+	// 1. Define Expiration, Issuer, and Audience (Aud)
+	// The JWT must expire quickly (e.g., 5 minutes)
+	claims := FinalClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "https://prod.api.authnull.com/authentication", // Your Issuer URL
+			Audience:  jwt.ClaimStrings{clientID},                     // The client_id Entra ID sent you
+			ExpiresAt: jwt.NewNumericDate(now.Add(5 * time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(now.Add(-10 * time.Second)), // Prevent rejection due to clock skew
+			NotBefore: jwt.NewNumericDate(now.Add(-10 * time.Second)),
+			Subject:   sub,
+		},
+		Acr: "possessionorinherence",
+		Amr: []string{"pop"},
+		//PreferredUsername: username,
+		Nonce: nonce,
+	}
+	if privateKey == nil {
+		log.Printf("FATAL: Private key not initialized. Init() failed?")
+		http.Error(w, "Internal token error", http.StatusInternalServerError)
+		return
+	}
+
+	// 2. Create the Token with the RS256 signing method
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	log.Default().Printf("KID generated : %s", signingKid)
+	// Set the Key ID (KID) in the header so Entra ID knows which public key (from your JWKS) to use for verification
+	token.Header["kid"] = signingKid
+
+	// 3. Sign the Token using your private key
+	signedToken, err := token.SignedString(privateKey)
+	if err != nil {
+		log.Printf("FATAL: Failed to sign JWT: %v", err)
+		http.Error(w, "Internal token error", http.StatusInternalServerError)
+		return
+	}
+	log.Default().Printf("Signed JWT: %s", signedToken)
+	// 4. Construct the Final POST Response (form_post)
+	// Entra ID requires a POST containing the id_token and state parameters.
+
+	// We must return a 200 OK HTML page with a self-submitting form.
+	// This is the OIDC 'form_post' response mode requirement.
+
+	formBody := fmt.Sprintf(`
+        <form method="POST" action="%s">
+            <input type="hidden" name="id_token" value="%s" />
+            <input type="hidden" name="state" value="%s" />
+        </form>
+        <script>document.forms[0].submit();</script>
+    `, redirectURI, signedToken, state)
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(formBody))
+	log.Printf("SUCCESS: Signed JWT and returning to Entra ID via form_post.")
 }

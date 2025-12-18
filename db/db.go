@@ -103,8 +103,8 @@ func GetRedisInstance() *redis.Client {
 
 	//connection to redis
 	client = redis.NewClient(&redis.Options{
-		Addr:     "redis-master.authnull-io.svc.cluster.local:6379",
-		Password: "8XGN8FP6eo",
+		Addr:     os.Getenv("REDIS_HOST"),
+		Password: os.Getenv("REDIS_PASSWORD"),
 		DB:       0,
 	})
 	//check if redis is connected

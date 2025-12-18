@@ -54,5 +54,18 @@ func RegisterRoutes(router *gin.Engine, webAuthnHandler *handlers.WebAuthnHandle
 		api.GET("/v1/Logout", loginHandler.SamlLogout)
 		api.POST("/backToLogin", loginHandler.BackToLogin)
 
+		// NEW — Entra EAM metadata endpoint
+		api.GET("/.well-known/openid-configuration", func(c *gin.Context) {
+			loginHandler.MetadataHandler(c.Writer, c.Request)
+		})
+
+		// NEW — Entra EAM dummy MFA endpoint
+		api.POST("/auth/external-mfa", func(ctx *gin.Context) {
+			loginHandler.ExternalMFAHandler(ctx.Writer, ctx.Request)
+		})
+
+		api.GET("/oauth2/v1/keys", func(c *gin.Context) {
+			loginHandler.JwksHandler(c.Writer, c.Request)
+		})
 	}
 }
