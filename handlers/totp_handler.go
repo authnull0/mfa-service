@@ -52,21 +52,22 @@ func (h *TOTPHandler) BeginTOTPSetup(c *gin.Context) {
 	}
 	orgname := strings.Split(req.Url, ".")[1]
 	tenantname := strings.Split(req.Url, ".")[0]
+	log.Default().Printf("Parsed orgname: %s, tenantname: %s", orgname, tenantname)
 	log.Printf("Starting TOTP setup for email: %s, tenant: %s", req.Email, orgname)
-	tenantDB, err := config.ConnectTenantDB(orgname)
-	if err != nil {
-		log.Printf("Failed to connect to tenant database: %v", err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to connect to tenant database"})
-		return
-	}
-	mfaRepo := repositories.NewMFARepository(tenantDB)
-	tenant := mfaRepo.FindTenantId(tenantname)
+	// tenantDB, err := config.ConnectTenantDB(orgname)
+	// if err != nil {
+	// 	log.Printf("Failed to connect to tenant database: %v", err)
+	// 	c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to connect to tenant database"})
+	// 	return
+	// }
+	//mfaRepo := repositories.NewMFARepository(tenantDB)
+	//tenant := mfaRepo.FindTenantId(tenantname)
 	// Get client from database - removed unused variables
-	_, _, err = fetchClientForMFA(req.Email, tenant.Id)
-	if err != nil {
-		c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: "client not found"})
-		return
-	}
+	// _, _, err = fetchClientForMFA(req.Email, tenant.Id)
+	// if err != nil {
+	// 	c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: "client not found"})
+	// 	return
+	// }
 
 	// Generate TOTP secret
 	issuer := os.Getenv("WEBAUTHN_RP_NAME")
@@ -141,12 +142,12 @@ func (h *TOTPHandler) ConfirmTOTPSetup(c *gin.Context) {
 	}
 
 	// Get client from database
-	tenantDB, client, err := fetchClientForMFA(req.Email, tenant.Id)
-	if err != nil {
-		c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: "client not found"})
-		return
-	}
-	log.Default().Printf("Fetched client: %s", client.Email)
+	// tenantDB, client, err := fetchClientForMFA(req.Email, tenant.Id)
+	// if err != nil {
+	// 	c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: "client not found"})
+	// 	return
+	// }
+	// log.Default().Printf("Fetched client: %s", client.Email)
 
 	// Generate backup codes
 	backupCodes, err := h.Service.GenerateBackupCodes(10)
@@ -299,13 +300,13 @@ func (h *TOTPHandler) VerifyTOTP(c *gin.Context) {
 
 	log.Printf("Verifying TOTP code for email: %s", req.Email)
 
-	// Get client from database
-	tenantDB, client, err := fetchClientForMFA(req.Email, tenant.Id)
-	if err != nil {
-		c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: "client not found"})
-		return
-	}
-	log.Default().Printf("Fetched client: %s", client.Email)
+	// // Get client from database
+	// tenantDB, client, err := fetchClientForMFA(req.Email, tenant.Id)
+	// if err != nil {
+	// 	c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: "client not found"})
+	// 	return
+	// }
+	// log.Default().Printf("Fetched client: %s", client.Email)
 	// Get TOTP method from MFA methods table
 	user := mfaRepo.FindUserDetails(req.Email, tenant.Id)
 	if user.UserId == 0 {
@@ -332,7 +333,7 @@ func (h *TOTPHandler) VerifyTOTP(c *gin.Context) {
 				Message: "Backup code accepted",
 				Method:  "backup_code",
 				UserID:  0,
-				Email:   client.Email,
+				Email:   "",
 			}
 			c.JSON(http.StatusOK, response)
 			return
@@ -362,7 +363,7 @@ func (h *TOTPHandler) VerifyTOTP(c *gin.Context) {
 	// Validate TOTP code
 	if h.Service.ValidateCodeWithWindow(secret, req.Code, 1) {
 		// Update last used timestamp
-		log.Default().Printf("Updating last used timestamp for clientID: %s", client.ID)
+		//log.Default().Printf("Updating last used timestamp for clientID: %s", client.ID)
 		mfaRepo.UpdateLastUsed(user.UserId, "totp")
 
 		log.Printf("TOTP code verified for: %s", req.Email)
@@ -473,13 +474,14 @@ func (h *TOTPHandler) DeleteTOTP(c *gin.Context) {
 	log.Printf("Removing TOTP Registration for email: %s", req.Email)
 
 	// Get client from database
-	tenantDB, client, err := fetchClientForMFA(req.Email, req.TenantID)
+	tenantDB, client, err := fetchClientForMFA(req.Email, req.OrgID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: "client not found"})
 		return
 	}
 	log.Default().Printf("Fetched client: %s", client.Email)
 	mfaRepo := repositories.NewMFARepository(tenantDB)
+
 	user := mfaRepo.FindUserDetails(req.Email, req.TenantID)
 	log.Default().Printf("Fetched User ID: %d", user.UserId)
 	if user.UserId == 0 {

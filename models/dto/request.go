@@ -88,5 +88,6 @@ type RegisterWalletSetupResponse struct {
 }
 type TOTPDeleteRequest struct {
 	Email    string `json:"email" binding:"required" example:"john@example.com"`
+	OrgID    int    `json:"orgId" binding:"required"`
 	TenantID int    `json:"tenantId" binding:"required"`
 }
