@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/authnull0/mfa-service/config"
+	"github.com/authnull0/mfa-service/db"
 	session "github.com/authnull0/mfa-service/internal"
 	"github.com/authnull0/mfa-service/models"
 	"github.com/authnull0/mfa-service/models/dto"
@@ -865,8 +866,8 @@ func (h *WebAuthnHandler) GetMFAStatus(c *gin.Context) {
 	// 	return
 	// }
 
-	tenantDB, err := config.ConnectTenantDB(orgname)
-	if err != nil {
+	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
+	if tenantDB == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
 		return
 	}
@@ -979,8 +980,8 @@ func (h *WebAuthnHandler) VerifyUser(c *gin.Context) {
 	orgname := strings.Split(req.Url, ".")[1]
 	tenantname := strings.Split(req.Url, ".")[0]
 
-	tenantDB, err := config.ConnectTenantDB(orgname)
-	if err != nil {
+	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
+	if tenantDB == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
 		return
 	}
@@ -1031,11 +1032,10 @@ func (h *WebAuthnHandler) VerifyUserPassword(email string, tenantID int, passwor
 	// 	return nil, fmt.Errorf("failed to get tenant db name: %w", err)
 	// }
 
-	tenantDB, err := config.ConnectTenantDB(tenantDBName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect tenant db: %w", err)
+	tenantDB := db.GetConnectiontoDatabaseDynamically(tenantDBName)
+	if tenantDB == nil {
+		return nil, fmt.Errorf("failed to connect tenant DB")
 	}
-
 	var user models.User
 	tenantIDStr := strconv.Itoa(tenantID)
 	if err := tenantDB.Where("email_address = ? AND domain_id = ?", email, tenantIDStr).First(&user).Error; err != nil {
