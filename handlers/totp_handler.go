@@ -100,6 +100,8 @@ func (h *TOTPHandler) BeginTOTPSetup(c *gin.Context) {
 		Account:     req.Email,
 		OTPAuthURL:  key.String(),
 	}
+	log.Default().Printf("Generated QR : %v", response.QRCode)
+	log.Default().Printf("Manual Entry : %v", response.ManualEntry)
 	c.JSON(http.StatusOK, response)
 }
 
@@ -133,6 +135,8 @@ func (h *TOTPHandler) ConfirmTOTPSetup(c *gin.Context) {
 	tenant := mfaRepo.FindTenantId(tenantname)
 
 	log.Printf("Confirming TOTP setup for email: %s", req.Email)
+	log.Default().Printf("Using Code: %s", req.Code)
+	log.Default().Printf("Using secret: %s", req.Secret)
 
 	// Validate the TOTP code
 	if !h.Service.ValidateCodeWithWindow(req.Secret, req.Code, 1) {
