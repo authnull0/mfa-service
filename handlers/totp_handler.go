@@ -135,7 +135,7 @@ func (h *TOTPHandler) ConfirmTOTPSetup(c *gin.Context) {
 	tenant := mfaRepo.FindTenantId(tenantname)
 
 	log.Printf("Confirming TOTP setup for email: %s", req.Email)
-	log.Default().Printf("Using URL: %s", req.Code)
+	log.Default().Printf("Using Code: %s", req.Code)
 	log.Default().Printf("Using secret: %s", req.Secret)
 
 	// Validate the TOTP code
