@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/authnull0/mfa-service/config"
+	db "github.com/authnull0/mfa-service/db"
 	"github.com/authnull0/mfa-service/models"
 	"github.com/authnull0/mfa-service/models/dto"
 	repositories "github.com/authnull0/mfa-service/repository"
@@ -123,10 +124,9 @@ func (h *TOTPHandler) ConfirmTOTPSetup(c *gin.Context) {
 	orgname := strings.Split(req.Url, ".")[1]
 	tenantname := strings.Split(req.Url, ".")[0]
 	log.Printf("Confirming TOTP setup for email: %s, tenant: %s", req.Email, orgname)
-	tenantDB, err := config.ConnectTenantDB(orgname)
-	if err != nil {
-		log.Printf("Failed to connect to tenant database: %v", err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to connect to tenant database"})
+	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
+	if tenantDB == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
 		return
 	}
 	mfaRepo := repositories.NewMFARepository(tenantDB)
@@ -289,10 +289,9 @@ func (h *TOTPHandler) VerifyTOTP(c *gin.Context) {
 	orgname := strings.Split(req.Url, ".")[1]
 	tenantname := strings.Split(req.Url, ".")[0]
 	log.Printf("Verifying TOTP setup for email: %s, tenant: %s", req.Email, orgname)
-	tenantDB, err := config.ConnectTenantDB(orgname)
-	if err != nil {
-		log.Printf("Failed to connect to tenant database: %v", err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to connect to tenant database"})
+	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
+	if tenantDB == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
 		return
 	}
 	mfaRepo := repositories.NewMFARepository(tenantDB)
@@ -404,7 +403,7 @@ func (h *TOTPHandler) updateMFAVerifiedStatus(tenantDB *gorm.DB, tenantID int) {
 		log.Printf("Failed to update client mfa_verified status: %v", err)
 		// Don't fail the authentication for this, just log the error
 	} else {
-		log.Printf("Successfully updated MFA verified status for tenant: %s", tenantID)
+		log.Printf("Successfully updated MFA verified status for tenant: %d", tenantID)
 	}
 }
 
@@ -473,13 +472,23 @@ func (h *TOTPHandler) DeleteTOTP(c *gin.Context) {
 
 	log.Printf("Removing TOTP Registration for email: %s", req.Email)
 
-	// Get client from database
-	tenantDB, client, err := fetchClientForMFA(req.Email, req.OrgID)
+	orgname, err := util.GetOrganizationDatabaseName(req.OrgID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: "client not found"})
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to get organization database name"})
 		return
 	}
-	log.Default().Printf("Fetched client: %s", client.Email)
+	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
+	if tenantDB == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
+		return
+	}
+	// // Get client from database
+	// tenantDB, client, err := fetchClientForMFA(req.Email, req.OrgID)
+	// if err != nil {
+	// 	c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: "client not found"})
+	// 	return
+	// }
+	// log.Default().Printf("Fetched client: %s", client.Email)
 	mfaRepo := repositories.NewMFARepository(tenantDB)
 
 	user := mfaRepo.FindUserDetails(req.Email, req.TenantID)
