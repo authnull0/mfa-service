@@ -139,8 +139,8 @@ func (h *TOTPHandler) ConfirmTOTPSetup(c *gin.Context) {
 	log.Default().Printf("Using secret: %s", req.Secret)
 
 	// Validate the TOTP code
-	if !h.Service.ValidateCodeWithWindow(req.Secret, req.Code, 1) {
-		log.Printf("Invalid TOTP code provided for: %s", req.Email)
+	if !h.Service.ValidateCode(req.Secret, req.Code) {
+		log.Printf("Your device is not in sync. Please enable automatic time, date and timezone settings on your device and try again for email: %s", req.Email)
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid TOTP code"})
 		return
 	}
@@ -364,7 +364,7 @@ func (h *TOTPHandler) VerifyTOTP(c *gin.Context) {
 	log.Default().Printf("Decrypted TOTP secret for client %s", method.ClientID)
 	log.Default().Printf("Secret: %s", secret)
 	// Validate TOTP code
-	if h.Service.ValidateCodeWithWindow(secret, req.Code, 1) {
+	if h.Service.ValidateCode(secret, req.Code) {
 		// Update last used timestamp
 		//log.Default().Printf("Updating last used timestamp for clientID: %s", client.ID)
 		mfaRepo.UpdateLastUsed(user.UserId, "totp")

@@ -34,7 +34,21 @@ func (s *TOTPService) GenerateSecret(accountName, issuer string) (*otp.Key, erro
 
 // Validate a TOTP code with time window (allows for clock skew)
 func (s *TOTPService) ValidateCode(secret, code string) bool {
-	return totp.Validate(code, secret)
+	secret = strings.TrimSpace(strings.ToUpper(secret))
+
+	valid, err := totp.ValidateCustom(
+		code,
+		secret,
+		time.Now().UTC(),
+		totp.ValidateOpts{
+			Period:    30,
+			Skew:      2, // ±2 steps = ±60 seconds
+			Digits:    otp.DigitsSix,
+			Algorithm: otp.AlgorithmSHA1,
+		},
+	)
+
+	return err == nil && valid
 }
 
 // Validate with custom time window
