@@ -140,7 +140,7 @@ func (h *TOTPHandler) ConfirmTOTPSetup(c *gin.Context) {
 
 	// Validate the TOTP code
 	if !h.Service.ValidateCode(req.Secret, req.Code) {
-		log.Printf("Your device is not in sync. Please enable automatic time, date and timezone settings on your device and try again for email: %s", req.Email)
+		log.Printf("Please enable automatic time, date and timezone settings on your mobile and try again for email: %s", req.Email)
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid TOTP code"})
 		return
 	}
@@ -469,6 +469,7 @@ func fetchClientForMFA(email string, tenantID int) (*gorm.DB, *models.Client, er
 }
 func (h *TOTPHandler) DeleteTOTP(c *gin.Context) {
 	var req dto.TOTPDeleteRequest
+	log.Default().Printf("Received TOTP delete request: %+v", req)
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid request"})
 		return
