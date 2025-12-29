@@ -141,7 +141,7 @@ func (h *TOTPHandler) ConfirmTOTPSetup(c *gin.Context) {
 	// Validate the TOTP code
 	if !h.Service.ValidateCode(req.Secret, req.Code) {
 		log.Printf("Please enable automatic time, date and timezone settings on your mobile and try again for email: %s", req.Email)
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid TOTP code"})
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "Please enable automatic time, date and timezone settings on your mobile and try again"})
 		return
 	}
 
