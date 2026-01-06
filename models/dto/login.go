@@ -1,10 +1,11 @@
 package dto
 
 type NormalLoginRequest struct {
-	Username string `json:"username"`
-	//Password  string `json:"password"`
-	Url       string `json:"url"`
-	RequestID string `json:"requestId"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+	Url        string `json:"url"`
+	RequestID  string `json:"requestId"`
+	NextFactor string `json:"nextFactor"`
 }
 
 type NormalLoginResponse struct {

@@ -293,28 +293,29 @@ func (h *LoginHandler) HandleNormalLogin(c *gin.Context) {
 	}
 
 	log.Default().Println("user:", user)
+	if normalLoginRequest.NextFactor == "PASSWORD" {
+		log.Default().Println("Validating Password for user:", normalLoginRequest.Username)
+		val, err := util.ComparePasswordAndHash(normalLoginRequest.Password, user.Password)
+		if err != nil {
+			log.Default().Println("Error:", err)
+			normalLoginResponse.Code = 500
+			normalLoginResponse.Message = "Error"
+			normalLoginResponse.Status = "error"
+			normalLoginResponse.FirstLogin = user.FirstLogin
+			c.JSON(http.StatusInternalServerError, normalLoginResponse)
+			return
+		}
 
-	// val, err := util.ComparePasswordAndHash(normalLoginRequest.Password, user.Password)
-	// if err != nil {
-	// 	log.Default().Println("Error:", err)
-	// 	normalLoginResponse.Code = 500
-	// 	normalLoginResponse.Message = "Error"
-	// 	normalLoginResponse.Status = "error"
-	// 	normalLoginResponse.FirstLogin = user.FirstLogin
-	// 	c.JSON(http.StatusInternalServerError, normalLoginResponse)
-	// 	return
-	// }
-
-	// if val == false {
-	// 	log.Default().Println("Error:", err)
-	// 	normalLoginResponse.Code = 401
-	// 	normalLoginResponse.Message = "Invalid Password"
-	// 	normalLoginResponse.Status = "Invalid Password"
-	// 	normalLoginResponse.FirstLogin = user.FirstLogin
-	// 	c.JSON(http.StatusInternalServerError, normalLoginResponse)
-	// 	return
-	// }
-
+		if val == false {
+			log.Default().Println("Error:", err)
+			normalLoginResponse.Code = 401
+			normalLoginResponse.Message = "Invalid Password"
+			normalLoginResponse.Status = "Invalid Password"
+			normalLoginResponse.FirstLogin = user.FirstLogin
+			c.JSON(http.StatusInternalServerError, normalLoginResponse)
+			return
+		}
+	}
 	//create session
 
 	session := &saml.Session{}
