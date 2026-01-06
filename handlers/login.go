@@ -293,6 +293,17 @@ func (h *LoginHandler) HandleNormalLogin(c *gin.Context) {
 	}
 
 	log.Default().Println("user:", user)
+
+	if user.Password == "" {
+		log.Default().Println("Error: Password not set for user:", normalLoginRequest.Username)
+		normalLoginResponse.Code = 401
+		normalLoginResponse.Message = "Password not set for user"
+		normalLoginResponse.Status = "error"
+		normalLoginResponse.FirstLogin = user.FirstLogin
+		c.JSON(http.StatusInternalServerError, normalLoginResponse)
+		return
+	}
+
 	if normalLoginRequest.NextFactor == "PASSWORD" {
 		log.Default().Println("Validating Password for user:", normalLoginRequest.Username)
 		val, err := util.ComparePasswordAndHash(normalLoginRequest.Password, user.Password)
