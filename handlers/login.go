@@ -294,7 +294,7 @@ func (h *LoginHandler) HandleNormalLogin(c *gin.Context) {
 
 	log.Default().Println("user:", user)
 
-	if normalLoginRequest.NextFactor != "PASSWORD" && user.Password == "" {
+	if normalLoginRequest.NextFactor == "PASSWORD" && user.Password == "" {
 		log.Default().Println("Error: Password not set for user:", normalLoginRequest.Username)
 		normalLoginResponse.Code = 401
 		normalLoginResponse.Message = "Password not set for user"
