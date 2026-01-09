@@ -227,3 +227,44 @@ func (r *MFARepository) FindTenantId(tenantname string) models.Tenant {
 	}
 	return tenant
 }
+
+func (r *MFARepository) IsTOTPEnabled(userID int, tenantID int) bool {
+	var count int64
+
+	r.DB.Table("user_mfa_config").
+		Where("user_id = ? AND mfa_detail = ? AND status = ?", userID, "TOTP", "Active").
+		Count(&count)
+
+	return count > 0
+}
+func (r *MFARepository) GetPendingTOTP(userID, tenantID int) (*models.TOTP, error) {
+	var totp models.TOTP
+
+	err := r.DB.Table("did.totp").
+		Where("user_id = ? AND tenant_id = ? AND status = ?",
+			userID, tenantID, "PENDING").
+		First(&totp).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &totp, nil
+}
+
+func (r *MFARepository) SavePendingTOTP(t *models.TOTP) error {
+	return r.DB.Table("did.totp").Create(t).Error
+}
+func (r *MFARepository) ActivateTOTP(
+	userID, tenantID int,
+	updatedAt time.Time,
+) error {
+
+	return r.DB.Table("did.totp").
+		Where("user_id = ? AND tenant_id = ? AND status = ?",
+			userID, tenantID, "PENDING").
+		Updates(map[string]interface{}{
+			"status":     "ACTIVE",
+			"updated_at": updatedAt,
+		}).Error
+}

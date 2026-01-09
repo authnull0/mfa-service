@@ -21,6 +21,8 @@ import (
 	repositories "github.com/authnull0/mfa-service/repository"
 	services "github.com/authnull0/mfa-service/service"
 	util "github.com/authnull0/mfa-service/utils"
+	"github.com/pquerna/otp"
+	"github.com/pquerna/otp/totp"
 )
 
 type TOTPHandler struct {
@@ -48,59 +50,103 @@ func NewTOTPHandler() *TOTPHandler {
 func (h *TOTPHandler) BeginTOTPSetup(c *gin.Context) {
 	var req dto.TOTPSetupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid request"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
+
 	orgname := strings.Split(req.Url, ".")[1]
 	tenantname := strings.Split(req.Url, ".")[0]
-	log.Default().Printf("Parsed orgname: %s, tenantname: %s", orgname, tenantname)
-	log.Printf("Starting TOTP setup for email: %s, tenant: %s", req.Email, orgname)
-	// tenantDB, err := config.ConnectTenantDB(orgname)
-	// if err != nil {
-	// 	log.Printf("Failed to connect to tenant database: %v", err)
-	// 	c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to connect to tenant database"})
-	// 	return
-	// }
-	//mfaRepo := repositories.NewMFARepository(tenantDB)
-	//tenant := mfaRepo.FindTenantId(tenantname)
-	// Get client from database - removed unused variables
-	// _, _, err = fetchClientForMFA(req.Email, tenant.Id)
-	// if err != nil {
-	// 	c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: "client not found"})
-	// 	return
-	// }
 
-	// Generate TOTP secret
+	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
+	if tenantDB == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
+		return
+	}
+
+	mfaRepo := repositories.NewMFARepository(tenantDB)
+	tenant := mfaRepo.FindTenantId(tenantname)
+
+	user := mfaRepo.FindUserDetails(req.Email, tenant.Id)
+	if user.UserId == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	// Block if already enabled
+	if mfaRepo.IsTOTPEnabled(user.UserId, tenant.Id) {
+		c.JSON(http.StatusConflict, gin.H{"error": "TOTP already enabled"})
+		return
+	}
+
 	issuer := os.Getenv("WEBAUTHN_RP_NAME")
 	if issuer == "" {
 		issuer = "AuthSec"
 	}
-	log.Default().Printf("Using issuer: %s", issuer)
-	key, err := h.Service.GenerateSecret(req.Email, issuer)
-	if err != nil {
-		log.Printf("Failed to generate TOTP secret: %v", err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to generate secret"})
-		return
+
+	//Reuse pending secret if exists
+	pending, _ := mfaRepo.GetPendingTOTP(user.UserId, tenant.Id)
+
+	var key *otp.Key
+	var err error
+
+	if pending != nil {
+		log.Default().Printf("Reusing pending TOTP for userID: %d", user.UserId)
+		secret, err := util.DecryptString(pending.SecretEnc)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read TOTP secret"})
+			return
+		}
+
+		key, err = totp.Generate(totp.GenerateOpts{
+			Issuer:      issuer,
+			AccountName: req.Email,
+			Secret:      []byte(secret),
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate TOTP"})
+			return
+		}
+	} else {
+		log.Default().Printf("Generating new TOTP for userID: %d", user.UserId)
+		key, err = totp.Generate(totp.GenerateOpts{
+			Issuer:      issuer,
+			AccountName: req.Email,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate TOTP"})
+			return
+		}
+
+		encSecret, _ := util.EncryptString(key.Secret())
+
+		err = mfaRepo.SavePendingTOTP(&models.TOTP{
+			UserID:    user.UserId,
+			TenantID:  tenant.Id,
+			OrgID:     tenant.OrganizationId,
+			AppID:     1,
+			Status:    "PENDING",
+			SecretEnc: encSecret,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save pending TOTP"})
+			return
+		}
 	}
 
-	// Generate QR code
 	qrCode, err := h.Service.GenerateQRCode(key, 256)
 	if err != nil {
-		log.Printf("Failed to generate QR code: %v", err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to generate QR code"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate QR"})
 		return
 	}
 
-	// Return setup data (secret will be confirmed in next step)
-	response := dto.TOTPSetupResponse{
-		Secret:      key.Secret(),
-		QRCode:      base64.StdEncoding.EncodeToString(qrCode),
-		ManualEntry: key.Secret(),
-		Issuer:      issuer,
-		Account:     req.Email,
-		OTPAuthURL:  key.String(),
-	}
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, dto.TOTPSetupResponse{
+		QRCode:     base64.StdEncoding.EncodeToString(qrCode),
+		Issuer:     issuer,
+		Account:    req.Email,
+		OTPAuthURL: key.String(),
+	})
 }
 
 // @Summary      Confirm TOTP Setup
@@ -118,154 +164,77 @@ func (h *TOTPHandler) BeginTOTPSetup(c *gin.Context) {
 func (h *TOTPHandler) ConfirmTOTPSetup(c *gin.Context) {
 	var req dto.TOTPConfirmRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid request"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
+
 	orgname := strings.Split(req.Url, ".")[1]
 	tenantname := strings.Split(req.Url, ".")[0]
-	log.Printf("Confirming TOTP setup for email: %s, tenant: %s", req.Email, orgname)
+
 	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
 	if tenantDB == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
 		return
 	}
+
 	mfaRepo := repositories.NewMFARepository(tenantDB)
 	tenant := mfaRepo.FindTenantId(tenantname)
 
-	log.Printf("Confirming TOTP setup for email: %s", req.Email)
-
-	// Validate the TOTP code
-	if !h.Service.ValidateCode(req.Secret, req.Code) {
-		log.Printf("Your device is not in sync. Please enable automatic time, date and timezone settings on your device and try again for email: %s", req.Email)
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "Your device is not in sync. Please enable automatic time, date and timezone settings on your device and try again"})
-		return
-	}
-
-	// Get client from database
-	// tenantDB, client, err := fetchClientForMFA(req.Email, tenant.Id)
-	// if err != nil {
-	// 	c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: "client not found"})
-	// 	return
-	// }
-	// log.Default().Printf("Fetched client: %s", client.Email)
-
-	// Generate backup codes
-	backupCodes, err := h.Service.GenerateBackupCodes(10)
-	if err != nil {
-		log.Printf("Failed to generate backup codes: %v", err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to generate backup codes"})
-		return
-	}
-
-	// Encrypt secret and backup codes
-	encryptedSecret, err := util.EncryptString(req.Secret)
-	if err != nil {
-		log.Printf("Failed to encrypt TOTP secret: %v", err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to save TOTP data"})
-		return
-	}
-
-	// Encrypt backup codes
-	encryptedCodes := make(pq.StringArray, len(backupCodes))
-	for i, code := range backupCodes {
-		encrypted, err := util.EncryptString(code)
-		if err != nil {
-			log.Printf("Failed to encrypt backup code: %v", err)
-			c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to save backup codes"})
-			return
-		}
-		encryptedCodes[i] = encrypted
-	}
-
-	// Create TOTP method data
-	totpData := map[string]interface{}{
-		"secret_encrypted": encryptedSecret,
-		"issuer":           os.Getenv("WEBAUTHN_RP_NAME"),
-		"algorithm":        "SHA1",
-		"digits":           6,
-		"period":           30,
-		"setup_completed":  time.Now().UTC(),
-	}
-
-	// Save to MFA methods table
 	user := mfaRepo.FindUserDetails(req.Email, tenant.Id)
 	if user.UserId == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
-	err = mfaRepo.EnableMethodWithBackupCodes(user.UserId, "totp", totpData, encryptedCodes)
+
+	// 🔑 Fetch pending TOTP
+	pending, err := mfaRepo.GetPendingTOTP(user.UserId, tenant.Id)
 	if err != nil {
-		log.Printf("Failed to save TOTP method: %v", err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to enable TOTP"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no pending TOTP setup"})
+		return
+	}
+	log.Default().Printf("Fetched pending TOTP for userID: %d", user.UserId)
+	log.Default().Printf("Pending TOTP details: %+v", pending)
+	// 🔍 Decrypt secret
+	secret, err := util.DecryptString(pending.SecretEnc)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read TOTP secret"})
 		return
 	}
 
-	var mfaConfig models.MFAConfig
-	if err := tenantDB.Where("name = ? AND tenant_id = ?", "TOTP", tenant.Id).First(&mfaConfig).Error; err == nil {
-		log.Printf("Fetched MFA config Details for TOTP: %+v", mfaConfig)
-
-	} else if err != gorm.ErrRecordNotFound {
-		log.Printf("Database error checking existing MFA config: %v", err)
-	}
-	// Build UserMFAConfig record
-	userMFAConfig := &models.UserMFAConfig{
-		UserID:    user.UserId,
-		TenantID:  tenant.Id,
-		OrgID:     tenant.OrganizationId,
-		AppID:     1, //Hardcoded for TOTP
-		MFAType:   mfaConfig.Id,
-		MFADetail: mfaConfig.Description,
-		Status:    "Active",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	// Call repository function
-	if err := mfaRepo.AddUserMFAConfig(userMFAConfig); err != nil {
-		log.Printf("Failed to save user MFA config: %v", err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to enable user MFA config"})
+	if !h.Service.ValidateCode(secret, req.Code) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired OTP"})
 		return
 	}
 
-	// Update client MFA settings in clients table
-	// updates := map[string]interface{}{
-	// 	"mfa_enabled": true,
-	// 	"updated_at":  time.Now(),
-	// }
+	// 🔐 Generate backup codes
+	backupCodes, err := h.Service.GenerateBackupCodes(10)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate backup codes"})
+		return
+	}
 
-	// // Set as default method if no other method is set
-	// if client.MFADefaultMethod == "" {
-	// 	updates["mfa_default_method"] = "totp"
-	// }
+	encryptedCodes := make(pq.StringArray, len(backupCodes))
+	for i, code := range backupCodes {
+		encryptedCodes[i], _ = util.EncryptString(code)
+	}
 
-	// // Add TOTP to MFA methods array if not present
-	// newMethods := client.MFAMethod
-	// if !contains(newMethods, "totp") {
-	// 	newMethods = append(newMethods, "totp")
-	// 	updates["mfa_method"] = newMethods
-	// }
+	// 🚀 Activate TOTP
+	err = mfaRepo.ActivateTOTP(user.UserId, tenant.Id, time.Now())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to activate TOTP"})
+		return
+	}
 
-	// if err := tenantDB.Model(&client).Updates(updates).Error; err != nil {
-	// 	log.Printf("Failed to update client MFA settings: %v", err)
-	// 	c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to update MFA settings"})
-	// 	return
-	// }
-
-	// Format backup codes for display
 	displayCodes := make([]string, len(backupCodes))
 	for i, code := range backupCodes {
 		displayCodes[i] = h.Service.FormatBackupCode(code)
 	}
 
-	log.Printf("TOTP setup completed successfully for: %s", req.Email)
-
-	response := dto.TOTPConfirmResponse{
+	c.JSON(http.StatusOK, dto.TOTPConfirmResponse{
 		Success:     true,
 		Message:     "TOTP enabled successfully",
 		BackupCodes: displayCodes,
-	}
-
-	c.JSON(http.StatusOK, response)
+	})
 }
 
 // @Summary      Verify TOTP Code

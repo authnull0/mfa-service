@@ -51,3 +51,19 @@ type TenantMfaConfig struct {
 func (TenantMfaConfig) TableName() string {
 	return "did.tenant_mfa_config"
 }
+
+type TOTP struct {
+	UserID    int    `gorm:"column:user_id" json:"user_id"`
+	TenantID  int    `gorm:"column:tenant_id" json:"tenant_id"`
+	OrgID     int    `gorm:"column:org_id" json:"org_id"`
+	AppID     int    `gorm:"column:app_id" json:"app_id"`
+	SecretEnc string `gorm:"column:secret_key" json:"secret_enc"`
+	//ExpiresAt time.Time `gorm:"not null" json:"expires_at"`
+	Status    string    `gorm:"column:status" json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (TOTP) TableName() string {
+	return "did.totp"
+}

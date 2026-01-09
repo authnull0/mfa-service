@@ -10,7 +10,7 @@ type TOTPConfirmRequest struct {
 	Email string `json:"email" binding:"required" example:"john@example.com"`
 	// TenantID int    `json:"tenantId" binding:"required" example:"855f81db-1567-413d-8b24-8db3a07f6bd9"`
 	// OrgID    int    `json:"orgId" binding:"required" example:"1"`
-	Secret string `json:"secret" binding:"required" example:"JBSWY3DPEHPK3PXP"`
+	Secret string `json:"secret" example:"JBSWY3DPEHPK3PXP"`
 	Code   string `json:"code" binding:"required" example:"123456"`
 	Url    string `json:"url" binding:"required"`
 }
