@@ -5,7 +5,7 @@ type NormalLoginRequest struct {
 	Password   string `json:"password"`
 	Url        string `json:"url"`
 	RequestID  string `json:"requestId"`
-	NextFactor string `json:"nextFactor"`
+	NextFactor string `json:"nextFactor" binding:"required"`
 }
 
 type NormalLoginResponse struct {
