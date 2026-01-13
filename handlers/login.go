@@ -304,7 +304,7 @@ func (h *LoginHandler) HandleNormalLogin(c *gin.Context) {
 		return
 	}
 
-	if normalLoginRequest.Factor == "PASSWORD" {
+	if normalLoginRequest.Factor == "PASSWORD" && normalLoginRequest.Password != "" {
 		log.Default().Println("Validating Password for user:", normalLoginRequest.Username)
 		val, err := util.ComparePasswordAndHash(normalLoginRequest.Password, user.Password)
 		if err != nil {
@@ -802,12 +802,12 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 		redirectParams := url.Values{}
 
 		redirectParams.Set("userName", nameId)
-		redirectParams.Set("first_login", "1")
-		redirectParams.Set("token", session.ID) // or your actual token
+		//redirectParams.Set("first_login", "1")
+		//redirectParams.Set("token", session.ID) // or your actual token
 		redirectParams.Set("url", fmt.Sprintf("%s.%s.dev.authnull.com", tenantName, orgName))
 
 		finalRedirectURL := fmt.Sprintf(
-			"https://ssc.authnull.com/ssc/signin?%s",
+			"https://sscdev.authnull.com/ssc/signin?%s",
 			redirectParams.Encode(),
 		)
 
