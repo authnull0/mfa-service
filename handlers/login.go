@@ -899,13 +899,14 @@ func (h *LoginHandler) SamlLogout(c *gin.Context) {
 		log.Default().Printf("Okta app Domain: %s", domain)
 
 		apiKey := authenticationMethod.APIKey
+		log.Default().Printf("API key : %v", apiKey)
 
 		client, err := okta.NewClient(context.Background(), okta.WithOrgUrl(domain), okta.WithToken(apiKey))
 		if err != nil {
 			fmt.Println("Error creating client:", err)
 			return
 		}
-		log.Default().Println("=====Okta CLient", client)
+		log.Default().Println("=====Okta CClient", client)
 
 		user, _, err := client.User.GetUser(session.NameID) // session.NameID = email
 		if err != nil {
