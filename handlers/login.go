@@ -898,7 +898,7 @@ func (h *LoginHandler) SamlLogout(c *gin.Context) {
 		domain := parsedUrl.Scheme + "://" + parsedUrl.Host
 		log.Default().Printf("Okta app Domain: %s", domain)
 
-		apiKey := authenticationMethod.APIKey
+		apiKey := strings.TrimSpace(authenticationMethod.APIKey)
 		log.Default().Printf("API key : %v", apiKey)
 
 		client, err := okta.NewClient(context.Background(), okta.WithOrgUrl(domain), okta.WithToken(apiKey))
