@@ -908,12 +908,15 @@ func (h *LoginHandler) SamlLogout(c *gin.Context) {
 		}
 		log.Default().Println("=====Okta CClient", client)
 
-		user, _, err := client.User.GetUser(session.NameID) // session.NameID = email
-		log.Default().Printf("Okta User : %v", user)
+		user, resp, err := client.User.GetUser(session.NameID)
 		if err != nil {
-			log.Println("Error finding user:", err)
+			log.Printf("Full Error: %v", err)
+			if resp != nil {
+				log.Printf("Status Code: %d", resp.StatusCode)
+			}
 			return
 		}
+		log.Default().Printf("Okta User : %v", user)
 
 		_, err = client.User.EndAllUserSessions(user.Id, nil)
 		if err != nil {
