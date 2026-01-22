@@ -17,6 +17,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -1678,4 +1679,103 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(formBody))
 	log.Printf("SUCCESS: Signed JWT and returning to Entra ID via form_post.")
+}
+func (h *LoginHandler) OrgLogin(c *gin.Context) {
+	var orgLoginResponse dto.OrgLoginResponse
+	var orgLoginRequest dto.OrgLoginRequest
+
+	//get the request from the body
+
+	if err := c.ShouldBindJSON(&orgLoginRequest); err != nil {
+		log.Default().Println("Error:", err)
+		orgLoginResponse.Code = 500
+		orgLoginResponse.Message = "Error"
+		orgLoginResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, orgLoginResponse)
+		return
+	}
+
+	var user models.User
+	orgLoginRequest.Username = strings.ToLower(orgLoginRequest.Username)
+
+	dbconn := db.GetConnectiontoDatabaseDynamically(os.Getenv("DB_NAME"))
+
+	//get the user details
+	orgLoginRequest.Username = strings.ToLower(orgLoginRequest.Username)
+	err := dbconn.Where("email_address = ?", orgLoginRequest.Username).First(&user).Error
+	if err != nil {
+		log.Default().Println("Error:", err)
+		orgLoginResponse.Code = 500
+		orgLoginResponse.Message = "Error"
+		orgLoginResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, orgLoginResponse)
+		return
+	}
+
+	//check if the password is valid
+
+	val, err := util.ComparePasswordAndHash(orgLoginRequest.Password, user.Password)
+	if err != nil {
+		log.Default().Println("Error:", err)
+		orgLoginResponse.Code = 500
+		orgLoginResponse.Message = "Error"
+		orgLoginResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, orgLoginResponse)
+		return
+	}
+
+	if val == false {
+		log.Default().Println("Error:", err)
+		orgLoginResponse.Code = 401
+		orgLoginResponse.Message = "Invalid Password"
+		orgLoginResponse.Status = "Invalid Password"
+
+		c.JSON(http.StatusInternalServerError, orgLoginResponse)
+		return
+	}
+
+	//create session
+
+	session := &saml.Session{}
+
+	session = &saml.Session{
+		ID:         base64.StdEncoding.EncodeToString(util.RandomBytes(32)),
+		NameID:     user.EmailAddress,
+		CreateTime: saml.TimeNow(),
+		ExpireTime: saml.TimeNow().Add(sessionMaxAge),
+		Index:      hex.EncodeToString(util.RandomBytes(32)),
+		UserName:   user.EmailAddress,
+		// nolint:gocritic // Groups should be a slice here.
+		Groups:         []string{"SUPERADMIN"},
+		UserEmail:      user.EmailAddress,
+		UserCommonName: user.EmailAddress,
+		UserSurname:    user.EmailAddress,
+		UserGivenName:  user.EmailAddress,
+		// CustomAttributes: response.Assertion.AttributeStatements[0].Attributes,
+
+	}
+
+	err = Server.Store.Put(fmt.Sprintf("/sessions/%s", session.ID), session)
+	if err != nil {
+		log.Default().Println("Error:", err)
+		orgLoginResponse.Code = 500
+		orgLoginResponse.Message = "Error"
+		orgLoginResponse.Status = "error"
+
+		c.JSON(http.StatusInternalServerError, orgLoginResponse)
+		return
+	}
+
+	log.Default().Println("Session:", session.ID)
+
+	orgLoginResponse.Code = 200
+	orgLoginResponse.Message = "Success"
+	orgLoginResponse.Status = "ok"
+	orgLoginResponse.Token = session.ID
+
+	c.JSON(http.StatusOK, orgLoginResponse)
+
 }
