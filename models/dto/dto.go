@@ -24,3 +24,14 @@ type Params struct {
 	SaltLength  uint32
 	KeyLength   uint32
 }
+type OrgLoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type OrgLoginResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Status  string `json:"status"`
+	Token   string `json:"token"`
+}
