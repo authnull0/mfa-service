@@ -53,6 +53,7 @@ func RegisterRoutes(router *gin.Engine, webAuthnHandler *handlers.WebAuthnHandle
 		api.GET("/emaptasaml/login", util.SamlHandler)
 		api.GET("/v1/Logout", loginHandler.SamlLogout)
 		api.POST("/backToLogin", loginHandler.BackToLogin)
+		api.POST("/okta/orgLogin", loginHandler.OrgLogin)
 
 		// NEW — Entra EAM metadata endpoint
 		api.GET("/.well-known/openid-configuration", func(c *gin.Context) {
