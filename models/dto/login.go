@@ -99,3 +99,14 @@ type Metadata struct {
 	AuthenticationMode     string `json:"authenticationMode"`     // EAM-specific: "Synchronous"
 	AuthenticationEndpoint string `json:"authenticationEndpoint"` // EAM-specific: Your POST endpoint URL.
 }
+type OrgLoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type OrgLoginResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Status  string `json:"status"`
+	Token   string `json:"token"`
+}
