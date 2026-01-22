@@ -294,27 +294,39 @@ func (h *LoginHandler) HandleNormalLogin(c *gin.Context) {
 
 	log.Default().Println("user:", user)
 
-	// val, err := util.ComparePasswordAndHash(normalLoginRequest.Password, user.Password)
-	// if err != nil {
-	// 	log.Default().Println("Error:", err)
-	// 	normalLoginResponse.Code = 500
-	// 	normalLoginResponse.Message = "Error"
-	// 	normalLoginResponse.Status = "error"
-	// 	normalLoginResponse.FirstLogin = user.FirstLogin
-	// 	c.JSON(http.StatusInternalServerError, normalLoginResponse)
-	// 	return
-	// }
+	if normalLoginRequest.Factor == "PASSWORD" && user.Password == "" {
+		log.Default().Println("Error: Password not set for user:", normalLoginRequest.Username)
+		normalLoginResponse.Code = 401
+		normalLoginResponse.Message = "Password not set for user"
+		normalLoginResponse.Status = "error"
+		normalLoginResponse.FirstLogin = user.FirstLogin
+		c.JSON(http.StatusInternalServerError, normalLoginResponse)
+		return
+	}
 
-	// if val == false {
-	// 	log.Default().Println("Error:", err)
-	// 	normalLoginResponse.Code = 401
-	// 	normalLoginResponse.Message = "Invalid Password"
-	// 	normalLoginResponse.Status = "Invalid Password"
-	// 	normalLoginResponse.FirstLogin = user.FirstLogin
-	// 	c.JSON(http.StatusInternalServerError, normalLoginResponse)
-	// 	return
-	// }
+	if normalLoginRequest.Factor == "PASSWORD" && normalLoginRequest.Password != "" {
+		log.Default().Println("Validating Password for user:", normalLoginRequest.Username)
+		val, err := util.ComparePasswordAndHash(normalLoginRequest.Password, user.Password)
+		if err != nil {
+			log.Default().Println("Error:", err)
+			normalLoginResponse.Code = 500
+			normalLoginResponse.Message = "Error"
+			normalLoginResponse.Status = "error"
+			normalLoginResponse.FirstLogin = user.FirstLogin
+			c.JSON(http.StatusInternalServerError, normalLoginResponse)
+			return
+		}
 
+		if val == false {
+			log.Default().Println("Error:", err)
+			normalLoginResponse.Code = 401
+			normalLoginResponse.Message = "Invalid Password"
+			normalLoginResponse.Status = "Invalid Password"
+			normalLoginResponse.FirstLogin = user.FirstLogin
+			c.JSON(http.StatusInternalServerError, normalLoginResponse)
+			return
+		}
+	}
 	//create session
 
 	session := &saml.Session{}
@@ -642,7 +654,7 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 		}
 		//c.JSON(http.StatusOK, handleSamlResponse)
 		//return
-		authnullLogoutUrl := "https://default.devsetup.prod.authnull.com/custom/Logout"
+		authnullLogoutUrl := "https://default.devsetup.dev.authnull.com/custom/Logout"
 		log.Default().Println("Redirecting to Authnull Logout URL:", authnullLogoutUrl)
 
 		c.Redirect(http.StatusFound, authnullLogoutUrl)
@@ -792,7 +804,7 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 		redirectParams.Set("userName", nameId)
 		redirectParams.Set("first_login", "1")
 		redirectParams.Set("token", session.ID) // or your actual token
-		redirectParams.Set("url", fmt.Sprintf("%s.%s.prod.authnull.com", tenantName, orgName))
+		redirectParams.Set("url", fmt.Sprintf("%s.%s.dev.authnull.com", tenantName, orgName))
 
 		finalRedirectURL := fmt.Sprintf(
 			"https://ssc.authnull.com/ssc/signin?%s",
@@ -886,20 +898,25 @@ func (h *LoginHandler) SamlLogout(c *gin.Context) {
 		domain := parsedUrl.Scheme + "://" + parsedUrl.Host
 		log.Default().Printf("Okta app Domain: %s", domain)
 
-		apiKey := authenticationMethod.APIKey
+		apiKey := strings.TrimSpace(authenticationMethod.APIKey)
+		log.Default().Printf("API key : %v", apiKey)
 
 		client, err := okta.NewClient(context.Background(), okta.WithOrgUrl(domain), okta.WithToken(apiKey))
 		if err != nil {
 			fmt.Println("Error creating client:", err)
 			return
 		}
-		log.Default().Println("=====Okta CLient", client)
+		log.Default().Println("=====Okta CClient", client)
 
-		user, _, err := client.User.GetUser(session.NameID) // session.NameID = email
+		user, resp, err := client.User.GetUser(session.NameID)
 		if err != nil {
-			log.Println("Error finding user:", err)
+			log.Printf("Full Error: %v", err)
+			if resp != nil {
+				log.Printf("Status Code: %d", resp.StatusCode)
+			}
 			return
 		}
+		log.Default().Printf("Okta User : %v", user)
 
 		_, err = client.User.EndAllUserSessions(user.Id, nil)
 		if err != nil {
@@ -1199,7 +1216,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 	//make a call to the sso mfa endpoint
 
 	//url := os.Getenv("DO_AUTHNV4")
-	url := "https://prod.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
+	url := "https://dev.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
 
 	log.Default().Println("url:", url)
 
@@ -1433,7 +1450,7 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 	// w.WriteHeader(http.StatusOK)
 	// w.Write([]byte(fmt.Sprintf("<html><body>OIDC flow received successfully for user %s. Next step: JWT Signing.</body></html>", loginHint)))
 
-	url := "https://prod.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
+	url := "https://dev.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
 
 	log.Default().Println("url:", url)
 
@@ -1530,7 +1547,7 @@ func (h *LoginHandler) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Metadata endpoint called by Entra")
 
 	// Define your Issuer URL base
-	issuerURL := "https://prod.api.authnull.com/authentication"
+	issuerURL := "https://dev.api.authnull.com/authentication"
 
 	// Construct the full metadata response
 	meta := dto.Metadata{
@@ -1611,8 +1628,8 @@ func SignAndPostJWT(w http.ResponseWriter, r *http.Request, username, redirectUR
 	// The JWT must expire quickly (e.g., 5 minutes)
 	claims := FinalClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "https://prod.api.authnull.com/authentication", // Your Issuer URL
-			Audience:  jwt.ClaimStrings{clientID},                     // The client_id Entra ID sent you
+			Issuer:    "https://dev.api.authnull.com/authentication", // Your Issuer URL
+			Audience:  jwt.ClaimStrings{clientID},                    // The client_id Entra ID sent you
 			ExpiresAt: jwt.NewNumericDate(now.Add(5 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(now.Add(-10 * time.Second)), // Prevent rejection due to clock skew
 			NotBefore: jwt.NewNumericDate(now.Add(-10 * time.Second)),
