@@ -295,27 +295,39 @@ func (h *LoginHandler) HandleNormalLogin(c *gin.Context) {
 
 	log.Default().Println("user:", user)
 
-	// val, err := util.ComparePasswordAndHash(normalLoginRequest.Password, user.Password)
-	// if err != nil {
-	// 	log.Default().Println("Error:", err)
-	// 	normalLoginResponse.Code = 500
-	// 	normalLoginResponse.Message = "Error"
-	// 	normalLoginResponse.Status = "error"
-	// 	normalLoginResponse.FirstLogin = user.FirstLogin
-	// 	c.JSON(http.StatusInternalServerError, normalLoginResponse)
-	// 	return
-	// }
+	if normalLoginRequest.Factor == "PASSWORD" && user.Password == "" {
+		log.Default().Println("Error: Password not set for user:", normalLoginRequest.Username)
+		normalLoginResponse.Code = 401
+		normalLoginResponse.Message = "Password not set for user"
+		normalLoginResponse.Status = "error"
+		normalLoginResponse.FirstLogin = user.FirstLogin
+		c.JSON(http.StatusInternalServerError, normalLoginResponse)
+		return
+	}
 
-	// if val == false {
-	// 	log.Default().Println("Error:", err)
-	// 	normalLoginResponse.Code = 401
-	// 	normalLoginResponse.Message = "Invalid Password"
-	// 	normalLoginResponse.Status = "Invalid Password"
-	// 	normalLoginResponse.FirstLogin = user.FirstLogin
-	// 	c.JSON(http.StatusInternalServerError, normalLoginResponse)
-	// 	return
-	// }
+	if normalLoginRequest.Factor == "PASSWORD" && normalLoginRequest.Password != "" {
+		log.Default().Println("Validating Password for user:", normalLoginRequest.Username)
+		val, err := util.ComparePasswordAndHash(normalLoginRequest.Password, user.Password)
+		if err != nil {
+			log.Default().Println("Error:", err)
+			normalLoginResponse.Code = 500
+			normalLoginResponse.Message = "Error"
+			normalLoginResponse.Status = "error"
+			normalLoginResponse.FirstLogin = user.FirstLogin
+			c.JSON(http.StatusInternalServerError, normalLoginResponse)
+			return
+		}
 
+		if val == false {
+			log.Default().Println("Error:", err)
+			normalLoginResponse.Code = 401
+			normalLoginResponse.Message = "Invalid Password"
+			normalLoginResponse.Status = "Invalid Password"
+			normalLoginResponse.FirstLogin = user.FirstLogin
+			c.JSON(http.StatusInternalServerError, normalLoginResponse)
+			return
+		}
+	}
 	//create session
 
 	session := &saml.Session{}
@@ -887,20 +899,25 @@ func (h *LoginHandler) SamlLogout(c *gin.Context) {
 		domain := parsedUrl.Scheme + "://" + parsedUrl.Host
 		log.Default().Printf("Okta app Domain: %s", domain)
 
-		apiKey := authenticationMethod.APIKey
+		apiKey := strings.TrimSpace(authenticationMethod.APIKey)
+		log.Default().Printf("API key : %v", apiKey)
 
 		client, err := okta.NewClient(context.Background(), okta.WithOrgUrl(domain), okta.WithToken(apiKey))
 		if err != nil {
 			fmt.Println("Error creating client:", err)
 			return
 		}
-		log.Default().Println("=====Okta CLient", client)
+		log.Default().Println("=====Okta Client", client)
 
-		user, _, err := client.User.GetUser(session.NameID) // session.NameID = email
+		user, resp, err := client.User.GetUser(session.NameID)
 		if err != nil {
-			log.Println("Error finding user:", err)
+			log.Printf("Full Error: %v", err)
+			if resp != nil {
+				log.Printf("Status Code: %d", resp.StatusCode)
+			}
 			return
 		}
+		log.Default().Printf("Okta User : %v", user)
 
 		_, err = client.User.EndAllUserSessions(user.Id, nil)
 		if err != nil {
