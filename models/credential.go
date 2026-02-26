@@ -24,3 +24,26 @@ type Credential struct {
 func (Credential) TableName() string {
 	return "did.credentials"
 }
+
+type PasskeyCredential struct {
+	ID              uint           `gorm:"primaryKey;autoIncrement"                    db:"id"`
+	UserID          int            `gorm:"type:varchar(255);not null;index"            db:"user_id"`          // FK → your clients table
+	TenantID        int            `gorm:"type:varchar(255);not null;index"            db:"tenant_id"`        // for multi-tenant isolation
+	CredentialID    []byte         `gorm:"type:bytea;not null;uniqueIndex"             db:"credential_id"`    // WebAuthn credential ID (raw bytes)
+	PublicKey       []byte         `gorm:"type:bytea;not null"                         db:"public_key"`       // COSE-encoded public key
+	AttestationType string         `gorm:"type:varchar(64);not null;default:'none'"    db:"attestation_type"` // "none", "packed", "fido-u2f", etc.
+	AAGUID          []byte         `gorm:"type:bytea"                                  db:"aaguid"`           // authenticator model identifier
+	SignCount       uint32         `gorm:"type:bigint;not null;default:0"              db:"sign_count"`       // increments each login; rollback = cloned key
+	Transports      pq.StringArray `gorm:"type:text[]"                                 db:"transports"`       // ["usb","nfc","ble","internal"]
+	UserVerified    bool           `gorm:"not null;default:false"                      db:"user_verified"`    // was PIN/biometric verified at registration?
+	BackupEligible  bool           `gorm:"not null;default:false"                      db:"backup_eligible"`  // can this passkey sync to the cloud?
+	BackupState     bool           `gorm:"not null;default:false"                      db:"backup_state"`     // is it currently backed up?
+	Name            string         `gorm:"type:varchar(255)"                           db:"name"`             // user-friendly label e.g. "MacBook Touch ID"
+	LastUsedAt      *time.Time     `gorm:"index"                                       db:"last_used_at"`
+	CreatedAt       time.Time      `gorm:"autoCreateTime"                              db:"created_at"`
+	UpdatedAt       time.Time      `gorm:"autoUpdateTime"                              db:"updated_at"`
+}
+
+func (PasskeyCredential) TableName() string {
+	return "did.passkey_credentials"
+}
