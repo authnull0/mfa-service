@@ -3,6 +3,7 @@ package models
 
 import (
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -10,16 +11,16 @@ import (
 )
 
 // Method to set credentials (called before BeginLogin)
-func (u *Client) SetCredentials(creds []webauthn.Credential) {
-	u.credentials = creds
+func (u *WebAuthnUser) SetCredentials(creds []webauthn.Credential) {
+	u.Credentials = creds
 }
 
 // WebAuthn interface method - returns loaded credentials
-func (u *Client) WebAuthnCredentials() []webauthn.Credential {
-	if len(u.credentials) == 0 {
+func (u *WebAuthnUser) WebAuthnCredentials() []webauthn.Credential {
+	if len(u.Credentials) == 0 {
 		log.Printf("Warning: WebAuthnCredentials called but no credentials loaded for user %s", u.Email)
 	}
-	return u.credentials
+	return u.Credentials
 }
 
 type Client struct {
@@ -40,32 +41,41 @@ type Client struct {
 	Email            string                `json:"email"`
 	credentials      []webauthn.Credential `gorm:"-" json:"-"`
 }
+type WebAuthnUser struct {
+	ID          int
+	Email       string
+	Credentials []webauthn.Credential
+}
 
-func NewWebAuthnUser(c *Client) *Client {
+func NewWebAuthnUser(c *WebAuthnUser) *WebAuthnUser {
 	return c
 }
 
 // WebAuthn interface methods
-func (u *Client) WebAuthnID() []byte {
+func (u *WebAuthnUser) WebAuthnID() []byte {
 	// Use ClientID instead of ID for WebAuthn
-	return []byte(u.ClientID)
+	return []byte(strconv.Itoa(int(u.ID)))
 }
 
-func (u *Client) WebAuthnName() string {
+func (u *WebAuthnUser) WebAuthnName() string {
 	return u.Email
 }
 
-func (u *Client) WebAuthnDisplayName() string {
-	if u.Name != "" {
-		return u.Name
+func (u *WebAuthnUser) WebAuthnDisplayName() string {
+	if u.Email != "" {
+		return u.Email
 	}
 	return u.Email
 }
 
-func (u *Client) WebAuthnIcon() string {
+func (u *WebAuthnUser) WebAuthnIcon() string {
 	return ""
 }
 
-func (c *Client) ToWebAuthnUser() webauthn.User {
+func (c *WebAuthnUser) ToWebAuthnUser() webauthn.User {
 	return c
 }
+
+// func (u *WebAuthnUser) WebAuthnCredentials() []webauthn.Credential {
+// 	return u.Credentials
+// }
