@@ -3,6 +3,7 @@ package repositories
 
 import (
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/authnull0/mfa-service/models"
@@ -94,13 +95,14 @@ func (r *CredentialRepository) AddCredential(userID string, cred *webauthn.Crede
 	return r.DB.Create(&credential).Error
 }
 
-func (r *ClientRepository) GetClientByEmailAndTenant(email string, tenantID int) (*models.Client, error) {
-	var client models.Client
-	err := r.DB.Where("email = ? AND tenant_id = ?", email, tenantID).First(&client).Error
+func (r *ClientRepository) GetClientByEmailAndTenant(email string, tenantID int) (*models.User, error) {
+	var user models.User
+	tenantIDStr := strconv.Itoa(tenantID)
+	err := r.DB.Where("email_address = ? AND domain_id = ?", email, tenantIDStr).First(&user).Error
 	if err != nil {
 		return nil, err
 	}
-	return &client, nil
+	return &user, nil
 }
 
 func (r *ClientRepository) SaveCredential(credential *models.Credential) error {

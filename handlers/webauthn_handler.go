@@ -189,26 +189,31 @@ func (h *WebAuthnHandler) BeginWebAuthnRegistration(c *gin.Context) {
 	}
 
 	// 4-5. User lookup and ClientID generation (keep existing code)
-	var user models.Client
-	err = tenantDB.Where("email = ? AND tenant_id = ?", req.Email, req.TenantID).First(&user).Error
+	//var user models.User
+	var webAuthnUser models.WebAuthnUser
+	clientRepo := repositories.NewClientRepository(tenantDB)
+	client, err := clientRepo.GetClientByEmailAndTenant(req.Email, req.TenantID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		log.Printf("Client not found: %v", err)
+		c.JSON(http.StatusNotFound, dto.ErrorResponse{
+			Error: "client not found",
+		})
 		return
 	}
+	log.Default().Printf("Fetched User Details : %v", client)
+	webAuthnUser.ID = client.UserId
+	webAuthnUser.Email = client.EmailAddress
+	log.Default().Printf("Populated WebAuthn : %v", webAuthnUser)
 
-	if user.ClientID == "" {
-		user.ClientID = uuid.New().String()
-		if err := tenantDB.Save(&user).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update user ClientID"})
-			return
-		}
-	}
+	// if user.ClientID == "" {
+	// 	user.ClientID = uuid.New().String()
+	// 	if err := tenantDB.Save(&user).Error; err != nil {
+	// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update user ClientID"})
+	// 		return
+	// 	}
+	// }
 	// 6. Begin WebAuthn registration
-	options, sessionData, err := h.WebAuthn.BeginRegistration(&user)
+	options, sessionData, err := h.WebAuthn.BeginRegistration(&webAuthnUser)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{
 			Error: "failed to begin registration: " + err.Error(),
@@ -217,7 +222,7 @@ func (h *WebAuthnHandler) BeginWebAuthnRegistration(c *gin.Context) {
 	}
 
 	// Save session (your existing code)
-	challengeKey := fmt.Sprintf("%s:%s", req.TenantID, req.Email)
+	challengeKey := fmt.Sprintf("%s:%s", strconv.Itoa(req.TenantID), req.Email)
 	sessionBytes, err := json.Marshal(sessionData)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{
@@ -255,7 +260,7 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Processing registration for email: %s, tenant: %s", reqBody.Email, reqBody.TenantID)
+	log.Printf("Processing registration for email: %s, tenant: %d", reqBody.Email, reqBody.TenantID)
 
 	// 1-3. Database connections (your existing code)
 	globalDB, err := config.ConnectGlobalDB()
@@ -294,9 +299,13 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 		})
 		return
 	}
+	log.Default().Printf("Fetched User Details : %v", client)
+	var webAuthnUser models.WebAuthnUser
+	webAuthnUser.ID = client.UserId
+	webAuthnUser.Email = client.EmailAddress
 
 	// 4. Load existing credentials and set them on the client
-	existingCredentials, _ := clientRepo.GetCredentialsByClientID(client.ID)
+	existingCredentials, _ := clientRepo.GetCredentialsByClientID(strconv.Itoa(webAuthnUser.ID))
 	webauthnCreds := make([]webauthn.Credential, len(existingCredentials))
 	for i, cred := range existingCredentials {
 		var aaguidBytes []byte
@@ -316,10 +325,10 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 	}
 
 	// Set credentials on the client (using your existing method)
-	client.SetCredentials(webauthnCreds)
+	webAuthnUser.SetCredentials(webauthnCreds)
 
 	// 5. Retrieve and validate session
-	challengeKey := fmt.Sprintf("%s:%s", reqBody.TenantID, reqBody.Email)
+	challengeKey := fmt.Sprintf("%s:%s", strconv.Itoa(reqBody.TenantID), reqBody.Email)
 	registrationMutex.Lock()
 	sessionBytes, ok := registrationChallenges[challengeKey]
 	registrationMutex.Unlock()
@@ -367,12 +376,12 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 	log.Printf("🔍 Calling WebAuthn.FinishRegistration with Client as WebAuthn user...")
 
 	// 7. Call WebAuthn library using your Client as the WebAuthn user
-	credential, err := h.WebAuthn.FinishRegistration(client, sessionData, req)
+	credential, err := h.WebAuthn.FinishRegistration(&webAuthnUser, sessionData, req)
 	if err != nil {
 		log.Printf("❌ WebAuthn registration validation failed: %v", err)
 		log.Printf("❌ Error type: %T", err)
 		log.Printf("❌ Session UserID: %s", string(sessionData.UserID))
-		log.Printf("❌ Client WebAuthnID: %s", string(client.WebAuthnID()))
+		log.Printf("❌ Client WebAuthnID: %s", string(webAuthnUser.WebAuthnID()))
 
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
 			Error: "WebAuthn registration validation failed: " + err.Error(),
@@ -401,7 +410,7 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 
 	cred := &models.Credential{
 		ID:              uuid.New(),
-		ClientID:        client.ID,
+		ClientID:        strconv.Itoa(client.UserId),
 		CredentialID:    credential.ID,
 		PublicKey:       credential.PublicKey,
 		AttestationType: credential.AttestationType,
@@ -424,7 +433,7 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 
 	// 9. Update MFA records
 	mfaRepo := repositories.NewMFARepository(tenantDB)
-	credentialCount, _ := clientRepo.GetCredentialCountByClientID(client.ID)
+	credentialCount, _ := clientRepo.GetCredentialCountByClientID(strconv.Itoa(client.UserId))
 
 	webauthnData := map[string]interface{}{
 		"credential_count":       credentialCount,
@@ -434,39 +443,39 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 		"latest_credential_id":   hex.EncodeToString(credential.ID),
 	}
 
-	if err := mfaRepo.EnableMethod(client.ID, "webauthn", webauthnData); err != nil {
+	if err := mfaRepo.EnableMethod(strconv.Itoa(client.UserId), "webauthn", webauthnData); err != nil {
 		log.Printf("Warning: Failed to create MFA method record: %v", err)
 	}
 
 	// 10. Update client MFA configuration
-	now := time.Now().UTC()
-	updates := map[string]interface{}{
-		"mfa_enabled": true,
-		"updated_at":  now,
-	}
+	//now := time.Now().UTC()
+	// updates := map[string]interface{}{
+	// 	"mfa_enabled": true,
+	// 	"updated_at":  now,
+	// }
 
-	// Fix for MFAEnrolledAt - since it's time.Time (not pointer), use IsZero()
-	if client.MFAEnrolledAt.IsZero() {
-		updates["mfa_enrolled_at"] = now
-	}
+	// // Fix for MFAEnrolledAt - since it's time.Time (not pointer), use IsZero()
+	// if webAuthnUser.MFAEnrolledAt.IsZero() {
+	// 	updates["mfa_enrolled_at"] = now
+	// }
 
-	if client.MFADefaultMethod == "" {
-		updates["mfa_default_method"] = "webauthn"
-	}
+	// if client.MFADefaultMethod == "" {
+	// 	updates["mfa_default_method"] = "webauthn"
+	// }
 
-	newMethods := client.MFAMethod
-	if !contains(newMethods, "webauthn") {
-		newMethods = append(newMethods, "webauthn")
-		updates["mfa_method"] = newMethods
-	}
+	// newMethods := client.MFAMethod
+	// if !contains(newMethods, "webauthn") {
+	// 	newMethods = append(newMethods, "webauthn")
+	// 	updates["mfa_method"] = newMethods
+	// }
 
-	if err := tenantDB.Model(&client).Updates(updates).Error; err != nil {
-		log.Printf("Failed to update client MFA config: %v", err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{
-			Error: "failed to update MFA config",
-		})
-		return
-	}
+	// if err := tenantDB.Model(&client).Updates(updates).Error; err != nil {
+	// 	log.Printf("Failed to update client MFA config: %v", err)
+	// 	c.JSON(http.StatusInternalServerError, dto.ErrorResponse{
+	// 		Error: "failed to update MFA config",
+	// 	})
+	// 	return
+	// }
 
 	// 11. Cleanup and respond
 	registrationMutex.Lock()
@@ -554,14 +563,14 @@ func (h *WebAuthnHandler) BeginAuthentication(c *gin.Context) {
 	}
 
 	// Check if client has MFA enabled
-	if !client.MFAEnabled {
-		log.Printf("MFA not enabled for client: %s", client.Email)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "MFA not enabled for this account"})
-		return
-	}
+	// if !client.MFAEnabled {
+	// 	log.Printf("MFA not enabled for client: %s", client.Email)
+	// 	c.JSON(http.StatusBadRequest, gin.H{"error": "MFA not enabled for this account"})
+	// 	return
+	// }
 
 	// FIXED: Load actual credentials instead of just checking count
-	dbCredentials, err := clientRepo.GetCredentialsByClientID(client.ID)
+	dbCredentials, err := clientRepo.GetCredentialsByClientID(strconv.Itoa(client.UserId))
 	if err != nil {
 		log.Printf("Error loading credentials: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load credentials"})
@@ -569,12 +578,12 @@ func (h *WebAuthnHandler) BeginAuthentication(c *gin.Context) {
 	}
 
 	if len(dbCredentials) == 0 {
-		log.Printf("No WebAuthn credentials found for client: %s", client.Email)
+		log.Printf("No WebAuthn credentials found for client: %s", client.EmailAddress)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no WebAuthn credentials registered"})
 		return
 	}
 
-	log.Printf("Found %d credentials in database for client: %s", len(dbCredentials), client.Email)
+	log.Printf("Found %d credentials in database for client: %s", len(dbCredentials), client.EmailAddress)
 
 	// Convert database credentials to WebAuthn credentials
 	webAuthnCredentials := make([]webauthn.Credential, len(dbCredentials))
@@ -603,14 +612,16 @@ func (h *WebAuthnHandler) BeginAuthentication(c *gin.Context) {
 			},
 		}
 	}
-
+	var webAuthnUser models.WebAuthnUser
+	webAuthnUser.ID = client.UserId
+	webAuthnUser.Email = client.EmailAddress
 	// CRITICAL: Set credentials in client BEFORE calling BeginLogin
-	client.SetCredentials(webAuthnCredentials) // We need to add this method
+	webAuthnUser.SetCredentials(webAuthnCredentials) // We need to add this method
 
-	log.Printf("Loaded and set %d WebAuthn credentials for client: %s", len(webAuthnCredentials), client.Email)
+	log.Printf("Loaded and set %d WebAuthn credentials for client: %s", len(webAuthnCredentials), client.EmailAddress)
 
 	// Now BeginLogin should find the credentials
-	assertion, sessionData, err := h.WebAuthn.BeginLogin(client)
+	assertion, sessionData, err := h.WebAuthn.BeginLogin(&webAuthnUser)
 	if err != nil {
 		log.Printf("Failed to begin WebAuthn authentication: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin authentication: " + err.Error()})
@@ -700,7 +711,7 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 	}
 
 	// Load credentials (same as in BeginAuthentication)
-	dbCredentials, err := clientRepo.GetCredentialsByClientID(client.ID)
+	dbCredentials, err := clientRepo.GetCredentialsByClientID(strconv.Itoa(client.UserId))
 	if err != nil {
 		log.Printf("Error loading credentials: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load credentials"})
@@ -708,7 +719,7 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 	}
 
 	if len(dbCredentials) == 0 {
-		log.Printf("No WebAuthn credentials found for client: %s", client.Email)
+		log.Printf("No WebAuthn credentials found for client: %s", client.EmailAddress)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no WebAuthn credentials registered"})
 		return
 	}
@@ -738,9 +749,11 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 			},
 		}
 	}
-
+	var webAuthnUser models.WebAuthnUser
+	webAuthnUser.ID = client.UserId
+	webAuthnUser.Email = client.EmailAddress
 	// Set credentials in client
-	client.SetCredentials(webAuthnCredentials)
+	webAuthnUser.SetCredentials(webAuthnCredentials)
 
 	log.Printf("Loaded %d credentials for authentication verification", len(webAuthnCredentials))
 
@@ -779,7 +792,7 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 	log.Printf("Created credential request, calling WebAuthn.FinishLogin")
 
 	// Finish WebAuthn authentication
-	credential, err := h.WebAuthn.FinishLogin(client, sessionData, credentialRequest)
+	credential, err := h.WebAuthn.FinishLogin(&webAuthnUser, sessionData, credentialRequest)
 	if err != nil {
 		log.Printf("WebAuthn authentication failed: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "authentication verification failed"})
@@ -830,7 +843,7 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 		Message:      "Authentication successful",
 		CredentialID: hex.EncodeToString(credential.ID),
 		UserID:       0,
-		Email:        client.Email,
+		Email:        client.EmailAddress,
 	}
 
 	c.JSON(http.StatusOK, response)

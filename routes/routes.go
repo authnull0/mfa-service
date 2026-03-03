@@ -37,6 +37,13 @@ func RegisterRoutes(router *gin.Engine, webAuthnHandler *handlers.WebAuthnHandle
 		//api.POST("/begin-login", webAuthnHandler.BeginLogin)
 		//api.POST("/finish-login", webAuthnHandler.FinishLogin)
 
+		// ── Passkey (NEW — no session manager needed) ─────────────────────────
+		passkeyHandler := handlers.NewPasskeyHandler(webAuthnHandler.WebAuthn)
+		api.POST("/mfa/passkey/beginSetup", passkeyHandler.BeginSetup)
+		api.POST("/mfa/passkey/confirmSetup", passkeyHandler.ConfirmSetup)
+		api.POST("/mfa/passkey/beginAuthentication", passkeyHandler.BeginAuthentication)
+		api.POST("/mfa/passkey/verify", passkeyHandler.FinishAuthentication)
+
 		api.POST("/auth/verifyUser", webAuthnHandler.VerifyUser)
 
 		decentralizedHandler := handlers.NewDecentralizedHandler()
