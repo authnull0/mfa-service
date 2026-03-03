@@ -161,7 +161,7 @@ func hasMethod(methods []models.MFAMethod, methodType string) bool {
 // @Router       /beginAuthRegistration [post]
 
 func (h *WebAuthnHandler) BeginWebAuthnRegistration(c *gin.Context) {
-	var req dto.BeginRegistrationRequest
+	var req dto.BeginWebAuthnRegistrationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
@@ -175,14 +175,24 @@ func (h *WebAuthnHandler) BeginWebAuthnRegistration(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect global DB"})
 		return
 	}
+	orgname := strings.Split(req.Url, ".")[1]
+	tenantname := strings.Split(req.Url, ".")[0]
+	log.Printf("Confirming TOTP setup for email: %s, tenant: %s", req.Email, orgname)
+	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
+	if tenantDB == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
+		return
+	}
+	mfaRepo := repositories.NewMFARepository(tenantDB)
+	tenant := mfaRepo.FindTenantId(tenantname)
 
-	tenantDBName, err := config.GetTenantDBName(globalDB, req.TenantID)
+	tenantDBName, err := config.GetTenantDBName(globalDB, tenant.Id)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tenant_id"})
 		return
 	}
 
-	tenantDB, err := config.ConnectTenantDB(tenantDBName)
+	tenantDB, err = config.ConnectTenantDB(tenantDBName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
 		return
@@ -192,7 +202,7 @@ func (h *WebAuthnHandler) BeginWebAuthnRegistration(c *gin.Context) {
 	//var user models.User
 	var webAuthnUser models.WebAuthnUser
 	clientRepo := repositories.NewClientRepository(tenantDB)
-	client, err := clientRepo.GetClientByEmailAndTenant(req.Email, req.TenantID)
+	client, err := clientRepo.GetClientByEmailAndTenant(req.Email, tenant.Id)
 	if err != nil {
 		log.Printf("Client not found: %v", err)
 		c.JSON(http.StatusNotFound, dto.ErrorResponse{
@@ -222,7 +232,7 @@ func (h *WebAuthnHandler) BeginWebAuthnRegistration(c *gin.Context) {
 	}
 
 	// Save session (your existing code)
-	challengeKey := fmt.Sprintf("%s:%s", strconv.Itoa(req.TenantID), req.Email)
+	challengeKey := fmt.Sprintf("%s:%s", strconv.Itoa(tenant.Id), req.Email)
 	sessionBytes, err := json.Marshal(sessionData)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{

@@ -6,6 +6,10 @@ type BeginRegistrationRequest struct {
 	TenantID int    `json:"tenantId" binding:"required"`
 	Email    string `json:"email" binding:"required,email"`
 }
+type BeginWebAuthnRegistrationRequest struct {
+	Url   string `json:"url" binding:"required"`
+	Email string `json:"email" binding:"required,email"`
+}
 
 type InitiateRegistrationResponse struct {
 	UserID  string      `json:"user_id"`
