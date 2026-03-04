@@ -270,7 +270,7 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Processing registration for email: %s, tenant: %d", reqBody.Email, reqBody.TenantID)
+	//log.Printf("Processing registration for email: %s, tenant: %d", reqBody.Email, reqBody.TenantID)
 
 	// 1-3. Database connections (your existing code)
 	globalDB, err := config.ConnectGlobalDB()
@@ -305,7 +305,7 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 	}
 
 	clientRepo := repositories.NewClientRepository(tenantDB)
-	client, err := clientRepo.GetClientByEmailAndTenant(reqBody.Email, reqBody.TenantID)
+	client, err := clientRepo.GetClientByEmailAndTenant(reqBody.Email, tenant.Id)
 	if err != nil {
 		log.Printf("Client not found: %v", err)
 		c.JSON(http.StatusNotFound, dto.ErrorResponse{
@@ -342,7 +342,7 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 	webAuthnUser.SetCredentials(webauthnCreds)
 
 	// 5. Retrieve and validate session
-	challengeKey := fmt.Sprintf("%s:%s", strconv.Itoa(reqBody.TenantID), reqBody.Email)
+	challengeKey := fmt.Sprintf("%s:%s", strconv.Itoa(tenant.Id), reqBody.Email)
 	registrationMutex.Lock()
 	sessionBytes, ok := registrationChallenges[challengeKey]
 	registrationMutex.Unlock()
