@@ -283,7 +283,7 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 	}
 	orgname := strings.Split(reqBody.Url, ".")[1]
 	tenantname := strings.Split(reqBody.Url, ".")[0]
-	log.Printf("Start Passkey setup for email: %s, tenant: %s", reqBody.Email, orgname)
+	log.Printf("Finish Registeration Passkey setup for email: %s, tenant: %s", reqBody.Email, orgname)
 	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
 	if tenantDB == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
