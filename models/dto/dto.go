@@ -17,8 +17,9 @@ type InitiateRegistrationResponse struct {
 }
 
 type FinishRegistrationRequest struct {
-	Email      string                              `json:"email" binding:"required"`
-	TenantID   int                                 `json:"tenantId" binding:"required"`
+	Email string `json:"email" binding:"required"`
+	//TenantID   int                                 `json:"tenantId" binding:"required"`
+	Url        string                              `json:"url" binding:"required"`
 	Credential protocol.CredentialCreationResponse `json:"credential" binding:"required"`
 }
 type Params struct {
