@@ -177,7 +177,7 @@ func (h *WebAuthnHandler) BeginWebAuthnRegistration(c *gin.Context) {
 	}
 	orgname := strings.Split(req.Url, ".")[1]
 	tenantname := strings.Split(req.Url, ".")[0]
-	log.Printf("Confirming TOTP setup for email: %s, tenant: %s", req.Email, orgname)
+	log.Printf("Start Passkey setup for email: %s, tenant: %s", req.Email, orgname)
 	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
 	if tenantDB == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
@@ -281,22 +281,26 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 		})
 		return
 	}
+	orgname := strings.Split(reqBody.Url, ".")[1]
+	tenantname := strings.Split(reqBody.Url, ".")[0]
+	log.Printf("Start Passkey setup for email: %s, tenant: %s", reqBody.Email, orgname)
+	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
+	if tenantDB == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
+		return
+	}
+	mfaRepo := repositories.NewMFARepository(tenantDB)
+	tenant := mfaRepo.FindTenantId(tenantname)
 
-	tenantDBName, err := config.GetTenantDBName(globalDB, reqBody.TenantID)
+	tenantDBName, err := config.GetTenantDBName(globalDB, tenant.Id)
 	if err != nil {
-		log.Printf("Invalid tenant ID: %v", err)
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
-			Error: "invalid tenant_id",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tenant_id"})
 		return
 	}
 
-	tenantDB, err := config.ConnectTenantDB(tenantDBName)
+	tenantDB, err = config.ConnectTenantDB(tenantDBName)
 	if err != nil {
-		log.Printf("Failed to connect to tenant DB: %v", err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{
-			Error: "failed to connect tenant DB",
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
 		return
 	}
 
@@ -442,7 +446,6 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 	log.Printf("✅ Credential saved to database")
 
 	// 9. Update MFA records
-	mfaRepo := repositories.NewMFARepository(tenantDB)
 	credentialCount, _ := clientRepo.GetCredentialCountByClientID(strconv.Itoa(client.UserId))
 
 	webauthnData := map[string]interface{}{
