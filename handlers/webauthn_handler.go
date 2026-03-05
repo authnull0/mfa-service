@@ -363,8 +363,9 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 		})
 		return
 	}
-
-	log.Printf("🔍 Session challenge: %s", sessionData.Challenge)
+	log.Printf("Session Challenge: %s", sessionData.Challenge)
+	log.Printf("Session UserID: %s", string(sessionData.UserID))
+	log.Printf("WebAuthn UserID: %s", string(webAuthnUser.WebAuthnID()))
 
 	// 6. Create HTTP request with raw credential data for WebAuthn library
 	credentialJSON, err := json.Marshal(reqBody.Credential)
