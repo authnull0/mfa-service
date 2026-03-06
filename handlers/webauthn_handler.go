@@ -393,10 +393,10 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 	// 7. Call WebAuthn library using your Client as the WebAuthn user
 	credential, err := h.WebAuthn.FinishRegistration(&webAuthnUser, sessionData, req)
 	if err != nil {
-		log.Printf("❌ WebAuthn registration validation failed: %v", err)
-		log.Printf("❌ Error type: %T", err)
-		log.Printf("❌ Session UserID: %s", string(sessionData.UserID))
-		log.Printf("❌ Client WebAuthnID: %s", string(webAuthnUser.WebAuthnID()))
+		log.Printf("WebAuthn registration validation failed: %v", err)
+		log.Printf("Error type: %T", err)
+		log.Printf("Session UserID: %s", string(sessionData.UserID))
+		log.Printf("Client WebAuthnID: %s", string(webAuthnUser.WebAuthnID()))
 
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
 			Error: "WebAuthn registration validation failed: " + err.Error(),
@@ -404,8 +404,8 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 		return
 	}
 
-	log.Printf("✅ WebAuthn validation successful!")
-	log.Printf("✅ Credential ID: %s", hex.EncodeToString(credential.ID))
+	log.Printf("WebAuthn validation successful!")
+	log.Printf("Credential ID: %s", hex.EncodeToString(credential.ID))
 
 	// 8. Save credential to database
 	var aaguid *uuid.UUID
@@ -444,7 +444,7 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 		return
 	}
 
-	log.Printf("✅ Credential saved to database")
+	log.Printf("Credential saved to database")
 
 	// 9. Update MFA records
 	credentialCount, _ := clientRepo.GetCredentialCountByClientID(strconv.Itoa(client.UserId))
@@ -496,7 +496,7 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 	delete(registrationChallenges, challengeKey)
 	registrationMutex.Unlock()
 
-	log.Printf("✅ Registration completed successfully for %s", reqBody.Email)
+	log.Printf("Registration completed successfully for %s", reqBody.Email)
 
 	response := dto.RegistrationResponse{
 		Success:      true,
@@ -532,8 +532,9 @@ func (h *WebAuthnHandler) BeginAuthentication(c *gin.Context) {
 	log.Println("Starting WebAuthn authentication...")
 
 	var req struct {
-		Email    string `json:"email" binding:"required"`
-		TenantID int    `json:"tenantId" binding:"required"`
+		Email string `json:"email" binding:"required"`
+		//TenantID int    `json:"tenantId" binding:"required"`
+		Url string `json:"url" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -542,7 +543,7 @@ func (h *WebAuthnHandler) BeginAuthentication(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Authentication request for email: %s, tenant: %s", req.Email, req.TenantID)
+	log.Printf("Authentication request for email: %s, tenant: %s", req.Email)
 
 	// Connect to global DB to get tenant DB name
 	globalDB, err := config.ConnectGlobalDB()
@@ -551,8 +552,18 @@ func (h *WebAuthnHandler) BeginAuthentication(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database connection failed"})
 		return
 	}
+	orgname := strings.Split(req.Url, ".")[1]
+	tenantname := strings.Split(req.Url, ".")[0]
+	log.Printf("Begin autentictaion asskey setup for email: %s, tenant: %s", req.Email, orgname)
+	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
+	if tenantDB == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
+		return
+	}
+	mfaRepo := repositories.NewMFARepository(tenantDB)
+	tenant := mfaRepo.FindTenantId(tenantname)
 
-	tenantDBName, err := config.GetTenantDBName(globalDB, req.TenantID)
+	tenantDBName, err := config.GetTenantDBName(globalDB, tenant.Id)
 	if err != nil {
 		log.Printf("Invalid tenant ID: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tenant_id"})
@@ -560,7 +571,7 @@ func (h *WebAuthnHandler) BeginAuthentication(c *gin.Context) {
 	}
 
 	// Connect to tenant DB
-	tenantDB, err := config.ConnectTenantDB(tenantDBName)
+	tenantDB, err = config.ConnectTenantDB(tenantDBName)
 	if err != nil {
 		log.Printf("Failed to connect to tenant DB: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "tenant database connection failed"})
@@ -569,7 +580,7 @@ func (h *WebAuthnHandler) BeginAuthentication(c *gin.Context) {
 
 	// Get client
 	clientRepo := repositories.NewClientRepository(tenantDB)
-	client, err := clientRepo.GetClientByEmailAndTenant(req.Email, req.TenantID)
+	client, err := clientRepo.GetClientByEmailAndTenant(req.Email, tenant.Id)
 	if err != nil {
 		log.Printf("Client not found: %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "client not found"})
@@ -650,7 +661,7 @@ func (h *WebAuthnHandler) BeginAuthentication(c *gin.Context) {
 		return
 	}
 
-	challengeKey := fmt.Sprintf("%s:%s:auth", req.TenantID, req.Email)
+	challengeKey := fmt.Sprintf("%d:%s:auth", tenant.Id, req.Email)
 	authenticationMutex.Lock()
 	authenticationChallenges[challengeKey] = sessionBytes
 	authenticationMutex.Unlock()
@@ -679,8 +690,9 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 	log.Println("Starting WebAuthn authentication verification...")
 
 	var req struct {
-		Email      string          `json:"email" binding:"required"`
-		TenantID   int             `json:"tenantId" binding:"required"`
+		Email string `json:"email" binding:"required"`
+		//TenantID   int             `json:"tenantId" binding:"required"`
+		Url        string          `json:"url" binding:"required"`
 		Credential json.RawMessage `json:"credential" binding:"required"`
 	}
 
@@ -690,7 +702,7 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Authentication verification for email: %s, tenant: %s", req.Email, req.TenantID)
+	log.Printf("Authentication verification for email: %s", req.Email)
 
 	// Connect to global DB to get tenant DB name
 	globalDB, err := config.ConnectGlobalDB()
@@ -699,8 +711,17 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database connection failed"})
 		return
 	}
-
-	tenantDBName, err := config.GetTenantDBName(globalDB, req.TenantID)
+	orgname := strings.Split(req.Url, ".")[1]
+	tenantname := strings.Split(req.Url, ".")[0]
+	log.Printf("Finish Registeration Passkey setup for email: %s, tenant: %s", req.Email, orgname)
+	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
+	if tenantDB == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
+		return
+	}
+	mfaRepo := repositories.NewMFARepository(tenantDB)
+	tenant := mfaRepo.FindTenantId(tenantname)
+	tenantDBName, err := config.GetTenantDBName(globalDB, tenant.Id)
 	if err != nil {
 		log.Printf("Invalid tenant ID: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tenant_id"})
@@ -708,7 +729,7 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 	}
 
 	// Connect to tenant DB
-	tenantDB, err := config.ConnectTenantDB(tenantDBName)
+	tenantDB, err = config.ConnectTenantDB(tenantDBName)
 	if err != nil {
 		log.Printf("Failed to connect to tenant DB: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "tenant database connection failed"})
@@ -717,7 +738,7 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 
 	// Get client
 	clientRepo := repositories.NewClientRepository(tenantDB)
-	client, err := clientRepo.GetClientByEmailAndTenant(req.Email, req.TenantID)
+	client, err := clientRepo.GetClientByEmailAndTenant(req.Email, tenant.Id)
 	if err != nil {
 		log.Printf("Client not found: %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "client not found"})
@@ -772,7 +793,7 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 	log.Printf("Loaded %d credentials for authentication verification", len(webAuthnCredentials))
 
 	// Retrieve authentication session
-	challengeKey := fmt.Sprintf("%s:%s:auth", req.TenantID, req.Email)
+	challengeKey := fmt.Sprintf("%s:%s:auth", tenant.Id, req.Email)
 	authenticationMutex.Lock()
 	sessionBytes, ok := authenticationChallenges[challengeKey]
 	authenticationMutex.Unlock()
@@ -824,7 +845,7 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 	}
 
 	// NEW: Update MFA method usage tracking
-	mfaRepo := repositories.NewMFARepository(tenantDB)
+	//mfaRepo := repositories.NewMFARepository(tenantDB)
 	if err := mfaRepo.UpdateLastUsed(1, "webauthn"); err != nil {
 		log.Printf("Warning: Failed to update MFA method usage: %v", err)
 		// Don't fail authentication for this, just log the warning
@@ -839,7 +860,7 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 
 	// Fetch the client for this user's tenant
 	var clients models.Client
-	if err := tenantDB.Where("tenant_id = ?", req.TenantID).First(&clients).Error; err != nil {
+	if err := tenantDB.Where("tenant_id = ?", tenant.Id).First(&clients).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find client and project"})
 		return
 	}
