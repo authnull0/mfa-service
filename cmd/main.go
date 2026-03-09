@@ -59,9 +59,9 @@ func main() {
 	// Start server
 	log.Printf("Starting %s server on port %s", getEnv("ENVIRONMENT", "development"), port)
 	log.Printf("WebAuthn Configuration:")
-	log.Printf("RP Name: %s", webAuthn.Config.RPDisplayName)
-	log.Printf("RP ID: %s", webAuthn.Config.RPID)
-	log.Printf("Origin: %s", webAuthn.Config.RPOrigins)
+	log.Printf("RP Name: %s", rpName)
+	log.Printf("RP ID: %s", rpID)
+	log.Printf("Origin: %s", origin)
 
 	if err := r.Run(":" + port); err != nil {
 		log.Fatal("Failed to start server:", err)
