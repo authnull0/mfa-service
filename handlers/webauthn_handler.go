@@ -388,7 +388,7 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	log.Printf("🔍 Calling WebAuthn.FinishRegistration with Client as WebAuthn user...")
+	log.Printf("Calling WebAuthn.FinishRegistration with Client as WebAuthn user...")
 
 	// 7. Call WebAuthn library using your Client as the WebAuthn user
 	credential, err := h.WebAuthn.FinishRegistration(&webAuthnUser, sessionData, req)
@@ -497,6 +497,33 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 	registrationMutex.Unlock()
 
 	log.Printf("Registration completed successfully for %s", reqBody.Email)
+	log.Default().Printf("Updating user MFA Config table...")
+	var mfaConfig models.MFAConfig
+	if err := tenantDB.Where("name = ? AND tenant_id = ?", "Passkey", tenant.Id).First(&mfaConfig).Error; err == nil {
+		log.Printf("Fetched MFA config Details for TOTP: %+v", mfaConfig)
+
+	} else if err != gorm.ErrRecordNotFound {
+		log.Printf("Database error checking existing MFA config: %v", err)
+	}
+	// Build UserMFAConfig record
+	userMFAConfig := &models.UserMFAConfig{
+		UserID:    client.UserId,
+		TenantID:  tenant.Id,
+		OrgID:     tenant.OrganizationId,
+		AppID:     1, //Hardcoded for TOTP
+		MFAType:   mfaConfig.Id,
+		MFADetail: mfaConfig.Description,
+		Status:    "Active",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	// Call repository function
+	if err := mfaRepo.AddUserMFAConfig(userMFAConfig); err != nil {
+		log.Printf("Failed to save user MFA config: %v", err)
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to enable user MFA config"})
+		return
+	}
 
 	response := dto.RegistrationResponse{
 		Success:      true,
