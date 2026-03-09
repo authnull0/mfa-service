@@ -9,8 +9,8 @@ import (
 func SetupWebAuthn(rpDisplayName, rpID, rpOrigin string) *webauthn.WebAuthn {
 	wconfig := &webauthn.Config{
 		RPDisplayName: rpDisplayName,
-		RPID:          "authnull.com",
-		RPOrigins:     []string{"https://sscdev.authnull.com"},
+		RPID:          "http://localhost:8080",
+		RPOrigins:     []string{"https://sscdev.authnull.com", "http://localhost:8080"},
 	}
 	webAuthn, err := webauthn.New(wconfig)
 	if err != nil {
