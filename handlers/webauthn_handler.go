@@ -19,6 +19,7 @@ import (
 	"github.com/authnull0/mfa-service/models"
 	"github.com/authnull0/mfa-service/models/dto"
 	repositories "github.com/authnull0/mfa-service/repository"
+	util "github.com/authnull0/mfa-service/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -1130,4 +1131,51 @@ func (h *WebAuthnHandler) VerifyUserPassword(email string, tenantID int, passwor
 	// }
 
 	return &user, nil
+}
+func (h *WebAuthnHandler) DeletePasskey(c *gin.Context) {
+	var req dto.TOTPDeleteRequest
+	log.Default().Printf("Delete totp request : %v", req)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid request"})
+		return
+	}
+
+	log.Printf("Removing Passkey Registration for email: %s", req.Email)
+
+	orgname, err := util.GetOrganizationDatabaseName(req.OrgID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to get organization database name"})
+		return
+	}
+	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
+	if tenantDB == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect tenant DB"})
+		return
+	}
+	// // Get client from database
+	// tenantDB, client, err := fetchClientForMFA(req.Email, req.OrgID)
+	// if err != nil {
+	// 	c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: "client not found"})
+	// 	return
+	// }
+	// log.Default().Printf("Fetched client: %s", client.Email)
+	mfaRepo := repositories.NewMFARepository(tenantDB)
+
+	user := mfaRepo.FindUserDetails(req.Email, req.TenantID)
+	log.Default().Printf("Fetched User ID: %d", user.UserId)
+	if user.UserId == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	if err = tenantDB.Model(&models.UserMFAConfig{}).Where("user_id = ? AND tenant_id = ? AND mfa_detail = ? and status = ?", user.UserId, req.TenantID, "Passkey", "Active").Update("status", "Inactive").Error; err != nil {
+		log.Printf("Failed to update UserMFAConfig status: %v", err)
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to update UserMFAConfig status"})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.SuccessResponse{
+		Success: true,
+		Message: "Passkey method removed successfully",
+	})
 }

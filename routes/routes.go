@@ -21,6 +21,7 @@ func RegisterRoutes(router *gin.Engine, webAuthnHandler *handlers.WebAuthnHandle
 		// New authentication route
 		api.POST("/mfa/beginAuthentication", webAuthnHandler.BeginAuthentication)
 		api.POST("/mfa/finishAuthentication", webAuthnHandler.FinishAuthentication)
+		api.POST("/mfa/deletePasskey", webAuthnHandler.DeletePasskey)
 
 		totpHandler := handlers.NewTOTPHandler()
 		api.POST("/mfa/totp/beginSetup", totpHandler.BeginTOTPSetup)
