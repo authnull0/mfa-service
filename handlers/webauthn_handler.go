@@ -687,19 +687,21 @@ func (h *WebAuthnHandler) BeginAuthentication(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "session data error"})
 		return
 	}
+	log.Default().Printf("Session Bytes : %v", sessionBytes)
 
 	challengeKey := fmt.Sprintf("%d:%s:auth", tenant.Id, req.Email)
 	authenticationMutex.Lock()
 	authenticationChallenges[challengeKey] = sessionBytes
 	authenticationMutex.Unlock()
 
+	log.Default().Printf("Authentication Challenge : %v", authenticationChallenges[challengeKey])
 	log.Printf(" Authentication challenge created for: %s", req.Email)
 
 	// Return the assertion to client
 	response := dto.WebAuthnOptionsResponse{
 		PublicKey: assertion,
 	}
-
+	log.Default().Printf("Assertion Response : %v", response)
 	c.JSON(http.StatusOK, response)
 }
 
@@ -820,9 +822,10 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 	log.Printf("Loaded %d credentials for authentication verification", len(webAuthnCredentials))
 
 	// Retrieve authentication session
-	challengeKey := fmt.Sprintf("%s:%s:auth", tenant.Id, req.Email)
+	challengeKey := fmt.Sprintf("%d:%s:auth", tenant.Id, req.Email)
 	authenticationMutex.Lock()
 	sessionBytes, ok := authenticationChallenges[challengeKey]
+	log.Default().Printf("Session Bytes : %v", sessionBytes)
 	authenticationMutex.Unlock()
 
 	if !ok {
@@ -838,7 +841,7 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid session data"})
 		return
 	}
-
+	log.Default().Printf("Session Data : %v", sessionData)
 	log.Printf("Session data decoded successfully")
 
 	// Create HTTP request with credential data for WebAuthn library
