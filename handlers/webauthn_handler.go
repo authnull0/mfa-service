@@ -889,15 +889,15 @@ func (h *WebAuthnHandler) FinishAuthentication(c *gin.Context) {
 	authenticationMutex.Unlock()
 
 	// Fetch the client for this user's tenant
-	var clients models.Client
-	if err := tenantDB.Where("tenant_id = ?", tenant.Id).First(&clients).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find client and project"})
-		return
-	}
-	*clients.MFAVerified = true
-	if err := tenantDB.Save(&clients).Error; err != nil {
-		log.Printf("Failed to update client mfa_verified status: %v", err)
-	}
+	// var clients models.Client
+	// if err := tenantDB.Where("tenant_id = ?", tenant.Id).First(&clients).Error; err != nil {
+	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find client and project"})
+	// 	return
+	// }
+	// *clients.MFAVerified = true
+	// if err := tenantDB.Save(&clients).Error; err != nil {
+	// 	log.Printf("Failed to update client mfa_verified status: %v", err)
+	// }
 
 	log.Printf("Authentication completed successfully for user: %s", req.Email)
 
