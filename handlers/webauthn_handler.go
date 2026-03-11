@@ -233,7 +233,7 @@ func (h *WebAuthnHandler) BeginWebAuthnRegistration(c *gin.Context) {
 	}
 
 	// Save session (your existing code)
-	challengeKey := fmt.Sprintf("%s:%s", strconv.Itoa(tenant.Id), req.Email)
+	challengeKey := fmt.Sprintf("%d:%s", tenant.Id, req.Email)
 	sessionBytes, err := json.Marshal(sessionData)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{
@@ -320,18 +320,33 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 	webAuthnUser.Email = client.EmailAddress
 
 	// 4. Load existing credentials and set them on the client
-	existingCredentials, _ := clientRepo.GetCredentialsByClientID(strconv.Itoa(webAuthnUser.ID))
+	// 4. Load existing credentials and set them on the client
+	existingCredentials, err := clientRepo.GetCredentialsByClientID(strconv.Itoa(webAuthnUser.ID))
+	if err != nil {
+		log.Printf("Failed to load credentials: %v", err)
+	}
+
 	webauthnCreds := make([]webauthn.Credential, len(existingCredentials))
+
 	for i, cred := range existingCredentials {
+
+		// Convert AAGUID pointer → []byte
 		var aaguidBytes []byte
 		if cred.AAGUID != nil {
-			aaguidBytes = (*cred.AAGUID)[:]
+			aaguidBytes = cred.AAGUID[:]
+		}
+
+		// Convert transports from DB → protocol.AuthenticatorTransport
+		var transports []protocol.AuthenticatorTransport
+		for _, t := range cred.Transports {
+			transports = append(transports, protocol.AuthenticatorTransport(t))
 		}
 
 		webauthnCreds[i] = webauthn.Credential{
 			ID:              cred.CredentialID,
 			PublicKey:       cred.PublicKey,
 			AttestationType: cred.AttestationType,
+			Transport:       transports,
 			Authenticator: webauthn.Authenticator{
 				AAGUID:    aaguidBytes,
 				SignCount: uint32(cred.SignCount),
@@ -343,7 +358,8 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 	webAuthnUser.SetCredentials(webauthnCreds)
 
 	// 5. Retrieve and validate session
-	challengeKey := fmt.Sprintf("%s:%s", strconv.Itoa(tenant.Id), reqBody.Email)
+	challengeKey := fmt.Sprintf("%d:%s", tenant.Id, reqBody.Email)
+
 	registrationMutex.Lock()
 	sessionBytes, ok := registrationChallenges[challengeKey]
 	registrationMutex.Unlock()
@@ -444,7 +460,11 @@ func (h *WebAuthnHandler) FinishRegistration(c *gin.Context) {
 		})
 		return
 	}
-
+	log.Printf("Credential Registered")
+	log.Printf("CredentialID: %x", credential.ID)
+	log.Printf("SignCount: %d", credential.Authenticator.SignCount)
+	log.Printf("BackupEligible: %v", credential.Transport)
+	log.Printf("BackupState: %v", credential.Authenticator.AAGUID)
 	log.Printf("Credential saved to database")
 
 	// 9. Update MFA records
