@@ -1217,7 +1217,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 	//make a call to the sso mfa endpoint
 
 	//url := os.Getenv("DO_AUTHNV4")
-	url := "http://localhost:8080/api/v1/authnv3/do-authenticationV4"
+	url := "http://authn-service:2882/authnull0/api/v1/authn/v3/do-authenticationV4"
 
 	log.Default().Println("url:", url)
 
@@ -1451,7 +1451,7 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 	// w.WriteHeader(http.StatusOK)
 	// w.Write([]byte(fmt.Sprintf("<html><body>OIDC flow received successfully for user %s. Next step: JWT Signing.</body></html>", loginHint)))
 
-	url := "http://localhost:8080/api/v1/authnv3/do-authenticationV4"
+	url := "http://authn-service:2882/authnull0/api/v1/authn/v3/do-authenticationV4"
 
 	log.Default().Println("url:", url)
 
