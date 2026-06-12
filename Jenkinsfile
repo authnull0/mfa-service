@@ -3,14 +3,10 @@ pipeline {
 
     environment {
         GITHUB_REPO = 'https://github.com/authnull0/mfa-service.git'
-        GITHUB_BRANCH = 'production-az'
-        PRIVATE_TAG = 'production'
-        PUBLIC_TAG  = '1.0.0'
-        DOCKER_REGISTRY_PRIVATE = 'docker-repo.authnull.com'
+        GITHUB_BRANCH = 'onprem'
+        PUBLIC_TAG  = '1.0.0-onprem'
         DOCKER_REGISTRY_PUBLIC= 'docker-repo-public.authnull.com'
-        DOCKER_PRIVATE_CREDENTIALS = credentials('authnull-repo')
         DOCKER_PUBLIC_CREDENTIALS = credentials('docker-repo-public')
-        DOCKER_IMAGE_PRIVATE = "docker-repo.authnull.com/mfa-service:${PRIVATE_TAG}"
         DOCKER_IMAGE_PUBLIC = "docker-repo-public.authnull.com/mfa-service:${PUBLIC_TAG}"
         AZURE_CLIENT_ID = credentials('clientid')  
         AZURE_CLIENT_SECRET = credentials('secretid') 
@@ -37,15 +33,6 @@ pipeline {
         }
                 // Build Stage
 
-        stage('Build Private Image') {
-            steps {
-                sh """
-                    echo "Building PRIVATE image: ${DOCKER_IMAGE_PRIVATE}"
-                    docker build -t ${DOCKER_IMAGE_PRIVATE} .
-                """
-            }
-        }
-
         stage('Build Public Image') {
             steps {
                 sh """
@@ -56,20 +43,6 @@ pipeline {
         }
 
         // Push Stage
-
-        stage('Push Private Image') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'authnull-repo', usernameVariable: 'USR', passwordVariable: 'PASS')]) {
-                    sh """
-                        echo "Logging in to PRIVATE registry"
-                        echo "\$PASS" | docker login ${DOCKER_REGISTRY_PRIVATE} -u "\$USR" --password-stdin
-
-                        docker push ${DOCKER_IMAGE_PRIVATE}
-                        docker logout ${DOCKER_REGISTRY_PRIVATE}
-                    """
-                }
-            }
-        }
 
         stage('Push Public Image') {
             steps {
@@ -90,7 +63,6 @@ pipeline {
         stage('Cleanup Images') {
             steps {
                 sh """
-                    docker rmi ${DOCKER_IMAGE_PRIVATE} || true
                     docker rmi ${DOCKER_IMAGE_PUBLIC} || true
                 """
             }
