@@ -1218,7 +1218,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 
 	baseURL := os.Getenv("SSO_VERIFICATION_URL")
 	if baseURL == "" {
-		baseURL = "http://onprem.authnull.com"
+		baseURL = "https://prod.api.authnull.com"
 	}
 	url := baseURL + "/authnull0/api/v1/authn/v3/do-authenticationV4"
 
