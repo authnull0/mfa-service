@@ -25,6 +25,10 @@ func main() {
 	// Load .env file if it exists (optional for development)
 	godotenv.Load()
 
+	// Connect to Redis for persistent challenge storage (90s TTL per challenge).
+	// Falls back to in-memory if Redis is unavailable.
+	session.InitRedis()
+
 	// Validate required environment variables
 	if err := validateRequiredEnvVars(); err != nil {
 		log.Fatal("Environment validation failed:", err)

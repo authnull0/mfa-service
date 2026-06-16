@@ -51,3 +51,15 @@ type TenantMfaConfig struct {
 func (TenantMfaConfig) TableName() string {
 	return "did.tenant_mfa_config"
 }
+
+type AdMfaProviderConfig struct {
+	OrgId     int       `gorm:"primaryKey;column:org_id"`
+	Provider  string    `gorm:"column:provider"`
+	Config    string    `gorm:"column:config"` // AES-GCM encrypted JSON
+	CreatedAt time.Time `gorm:"column:created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at"`
+}
+
+func (AdMfaProviderConfig) TableName() string {
+	return "did.ad_mfa_provider_config"
+}

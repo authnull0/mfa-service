@@ -39,6 +39,14 @@ func RegisterRoutes(router *gin.Engine, webAuthnHandler *handlers.WebAuthnHandle
 
 		api.POST("/auth/verifyUser", webAuthnHandler.VerifyUser)
 
+		// Push (Authnull Authenticator) — enrollment + challenge lifecycle
+		pushHandler := handlers.NewPushHandler()
+		api.POST("/mfa/push/beginSetup",    pushHandler.BeginSetup)
+		api.POST("/mfa/push/confirmSetup",  pushHandler.ConfirmSetup)
+		api.POST("/mfa/push/challenge",     pushHandler.Challenge)
+		api.POST("/mfa/push/respond",       pushHandler.Respond)
+		api.POST("/mfa/push/status",        pushHandler.Status)
+
 		decentralizedHandler := handlers.NewDecentralizedHandler()
 		api.POST("/mfa/beginRegisterWallet", decentralizedHandler.BeginRegisterWallet)
 
@@ -68,5 +76,14 @@ func RegisterRoutes(router *gin.Engine, webAuthnHandler *handlers.WebAuthnHandle
 		api.GET("/oauth2/v1/keys", func(c *gin.Context) {
 			loginHandler.JwksHandler(c.Writer, c.Request)
 		})
+
+		// AD MFA Provider Config — admin-facing
+		providerConfigHandler := handlers.NewMFAProviderConfigHandler()
+		api.POST("/mfa/provider/set", providerConfigHandler.SetMFAProvider)
+		api.POST("/mfa/provider/get", providerConfigHandler.GetMFAProvider)
+		api.POST("/mfa/provider/delete", providerConfigHandler.DeleteMFAProvider)
+
+		// AD MFA Provider Config — internal, consumed by ad-service only
+		api.POST("/mfa/internal/GetProviderConfig", providerConfigHandler.GetProviderConfig)
 	}
 }

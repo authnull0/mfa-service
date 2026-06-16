@@ -167,6 +167,28 @@ func (r *MFARepository) EnableMethodWithExpiry(clientID string, methodType strin
 	}).Error
 }
 
+// EnableMethodWithExpiryForUser creates an MFA method scoped to a userId with expiration.
+func (r *MFARepository) EnableMethodWithExpiryForUser(userID int, clientID string, methodType string, data interface{}, enabled bool, expiresAt time.Time) error {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	return r.DB.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "user_id"}, {Name: "method_type"}},
+		DoUpdates: clause.AssignmentColumns([]string{"method_data", "enabled", "expires_at", "updated_at"}),
+	}).Create(&models.MFAMethod{
+		ClientID:   clientID,
+		UserID:     userID,
+		MethodType: methodType,
+		MethodData: jsonData,
+		Enabled:    enabled,
+		ExpiresAt:  &expiresAt,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}).Error
+}
+
 // UpdateMethodData updates only the method_data field
 func (r *MFARepository) UpdateMethodData(clientID, methodType string, data []byte) error {
 	return r.DB.Model(&models.MFAMethod{}).
