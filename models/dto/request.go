@@ -91,3 +91,68 @@ type TOTPDeleteRequest struct {
 	OrgID    int    `json:"orgId" binding:"required"`
 	TenantID int    `json:"tenantId" binding:"required"`
 }
+
+// --- Push MFA ---
+
+type PushSetupRequest struct {
+	Email    string `json:"email" binding:"required"`
+	TenantID int    `json:"tenantId" binding:"required"`
+	OrgID    int    `json:"orgId" binding:"required"`
+}
+
+type PushConfirmRequest struct {
+	Email           string `json:"email" binding:"required"`
+	TenantID        int    `json:"tenantId" binding:"required"`
+	OrgID           int    `json:"orgId" binding:"required"`
+	UserID          int    `json:"userId" binding:"required"`
+	EnrollmentToken string `json:"enrollmentToken" binding:"required"`
+	ExpoPushToken   string `json:"expoPushToken" binding:"required"`
+	Platform        string `json:"platform"`
+	DeviceName      string `json:"deviceName"`
+}
+
+type PushChallengeRequest struct {
+	Email    string `json:"email" binding:"required"`
+	UserID   int    `json:"userId" binding:"required"`
+	TenantID int    `json:"tenantId" binding:"required"`
+	OrgID    int    `json:"orgId" binding:"required"`
+}
+
+type PushRespondRequest struct {
+	ChallengeID string `json:"challengeId" binding:"required"`
+	Approved    bool   `json:"approved"`
+}
+
+type PushStatusRequest struct {
+	ChallengeID string `json:"challengeId" binding:"required"`
+}
+
+// --- AD MFA Provider Config ---
+
+type SetMFAProviderRequest struct {
+	OrgId    int    `json:"orgId" binding:"required"`
+	Provider string `json:"provider" binding:"required"`
+	// Duo
+	IKey     string `json:"ikey,omitempty"`
+	SKey     string `json:"skey,omitempty"`
+	Host     string `json:"host,omitempty"`
+	// Okta
+	Domain   string `json:"domain,omitempty"`
+	APIToken string `json:"apiToken,omitempty"`
+	// Azure AD (MS Authenticator)
+	TenantId     string `json:"tenantId,omitempty"`
+	ClientId     string `json:"clientId,omitempty"`
+	ClientSecret string `json:"clientSecret,omitempty"`
+}
+
+type GetMFAProviderRequest struct {
+	OrgId int `json:"orgId" binding:"required"`
+}
+
+type DeleteMFAProviderRequest struct {
+	OrgId int `json:"orgId" binding:"required"`
+}
+
+type GetProviderConfigRequest struct {
+	OrgId int `json:"orgId" binding:"required"`
+}
