@@ -1216,8 +1216,11 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 	domainId, _ := strconv.Atoi(user.DomainId)
 	//make a call to the sso mfa endpoint
 
-	//url := os.Getenv("DO_AUTHNV4")
-	url := "https://prod.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
+	baseURL := os.Getenv("SSO_VERIFICATION_URL")
+	if baseURL == "" {
+		baseURL = "https://prod.api.authnull.com"
+	}
+	url := baseURL + "/authnull0/api/v1/authn/v3/do-authenticationV4"
 
 	log.Default().Println("url:", url)
 
@@ -1451,7 +1454,11 @@ func (h *LoginHandler) ExternalMFAHandler(w http.ResponseWriter, r *http.Request
 	// w.WriteHeader(http.StatusOK)
 	// w.Write([]byte(fmt.Sprintf("<html><body>OIDC flow received successfully for user %s. Next step: JWT Signing.</body></html>", loginHint)))
 
-	url := "https://prod.api.authnull.com/authnull0/api/v1/authn/v3/do-authenticationV4"
+	baseURL := os.Getenv("DO_AUTHNV4")
+	if baseURL == "" {
+		baseURL = "http://onprem.authnull.com"
+	}
+	url := baseURL + "/authnull0/api/v1/authn/v3/do-authenticationV4"
 
 	log.Default().Println("url:", url)
 
