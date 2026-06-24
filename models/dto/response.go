@@ -138,3 +138,68 @@ type UserMFAMethodsResponse struct {
 	DefaultMethod models.MFAConfig   `json:"default_method"`
 	Methods       []models.MFAConfig `json:"methods"`
 }
+
+// --- Push MFA ---
+
+type PushSetupResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+type PushConfirmResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+type PushChallengeResponse struct {
+	ChallengeID string `json:"challengeId"`
+	ExpiresIn   int    `json:"expiresIn"`
+}
+
+type PushRespondResponse struct {
+	Success bool `json:"success"`
+}
+
+type PushStatusResponse struct {
+	Status string `json:"status"`
+}
+
+// --- AD MFA Provider Config ---
+
+type SetMFAProviderResponse struct {
+	Message string `json:"message"`
+	Code    int    `json:"code"`
+	Status  string `json:"status"`
+}
+
+type GetMFAProviderResponse struct {
+	Message  string `json:"message"`
+	Code     int    `json:"code"`
+	Status   string `json:"status"`
+	Provider string `json:"provider"`
+	Host     string `json:"host,omitempty"`   // Duo only, non-secret
+	Domain   string `json:"domain,omitempty"` // Okta only, non-secret
+}
+
+type DeleteMFAProviderResponse struct {
+	Message string `json:"message"`
+	Code    int    `json:"code"`
+	Status  string `json:"status"`
+}
+
+// GetProviderConfigResponse is the internal response consumed by ad-service.
+// Returns decrypted credentials — only accessible from internal network.
+type GetProviderConfigResponse struct {
+	Provider string `json:"provider"`
+	// Duo
+	IKey     string `json:"ikey,omitempty"`
+	SKey     string `json:"skey,omitempty"`
+	Host     string `json:"host,omitempty"`
+	// Okta
+	Domain   string `json:"domain,omitempty"`
+	APIToken string `json:"apiToken,omitempty"`
+	// Azure AD
+	TenantId     string `json:"tenantId,omitempty"`
+	ClientId     string `json:"clientId,omitempty"`
+	ClientSecret string `json:"clientSecret,omitempty"`
+}
