@@ -36,6 +36,10 @@ func main() {
 
 	r := gin.Default()
 
+	r.GET("/health", func(c *gin.Context) {
+		c.String(200, "pong")
+	})
+
 	// Configure CORS dynamically
 	r.Use(setupCORS())
 
