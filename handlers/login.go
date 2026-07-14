@@ -264,11 +264,11 @@ func (h *LoginHandler) HandleNormalLogin(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&normalLoginRequest); err != nil {
 		log.Default().Println("Error:", err)
-		normalLoginResponse.Code = 500
-		normalLoginResponse.Message = "Error"
+		normalLoginResponse.Code = 400
+		normalLoginResponse.Message = "Invalid request body"
 		normalLoginResponse.Status = "error"
 
-		c.JSON(http.StatusInternalServerError, normalLoginResponse)
+		c.JSON(http.StatusBadRequest, normalLoginResponse)
 		return
 	}
 	RequestID := normalLoginRequest.RequestID
@@ -277,9 +277,17 @@ func (h *LoginHandler) HandleNormalLogin(c *gin.Context) {
 
 	var user models.User
 
-	//drim the url
-
-	orgname := strings.Split(normalLoginRequest.Url, ".")[1]
+	//drim the url — validate required inputs to avoid an index-out-of-range
+	//panic on an empty/malformed url (was: strings.Split(url, ".")[1]).
+	urlParts := strings.Split(normalLoginRequest.Url, ".")
+	if normalLoginRequest.Username == "" || len(urlParts) < 2 {
+		normalLoginResponse.Code = 400
+		normalLoginResponse.Message = "username and a valid url (domain) are required"
+		normalLoginResponse.Status = "error"
+		c.JSON(http.StatusBadRequest, normalLoginResponse)
+		return
+	}
+	orgname := urlParts[1]
 
 	db1 := db.GetConnectiontoDatabaseDynamically(orgname)
 
@@ -585,6 +593,15 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 	// Read the SAMLResponse from the request body
 	samlResponse := c.PostForm("SAMLResponse")
 	log.Default().Printf("SAML Response : %s\n", samlResponse)
+	// A missing SAMLResponse is a bad request, not a server error.
+	if samlResponse == "" {
+		c.JSON(http.StatusBadRequest, &dto.HandleSamlResponse{
+			Code:    400,
+			Status:  "Failed",
+			Message: "SAMLResponse is required",
+		})
+		return
+	}
 	// Decode and parse the SAML response
 	decodedResponse, err := base64.StdEncoding.DecodeString(samlResponse)
 	if err != nil {
@@ -956,8 +973,14 @@ func (h *LoginHandler) BackToLogin(c *gin.Context) {
 	log.Default().Printf("Token: %s", token)
 	log.Default().Printf("Tenant URL: %s", tenantUrl)
 
-	tenantName := strings.Split(tenantUrl, ".")[0]
-	orgName := strings.Split(tenantUrl, ".")[1]
+	// Validate url has a domain part to avoid an index-out-of-range panic.
+	urlParts := strings.Split(tenantUrl, ".")
+	if len(urlParts) < 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "a valid url (domain) is required"})
+		return
+	}
+	tenantName := urlParts[0]
+	orgName := urlParts[1]
 
 	log.Default().Printf("Organization Name: %s", orgName)
 	log.Default().Printf("Tenant Name: %s", tenantName)
@@ -1139,11 +1162,20 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&ssoMfaRequest); err != nil {
 		log.Default().Println("Error:", err)
-		ssoMfaResponse.Code = 500
-		ssoMfaResponse.Message = "Error"
+		ssoMfaResponse.Code = 400
+		ssoMfaResponse.Message = "Invalid request body"
 		ssoMfaResponse.Status = "error"
 
-		c.JSON(http.StatusInternalServerError, ssoMfaResponse)
+		c.JSON(http.StatusBadRequest, ssoMfaResponse)
+		return
+	}
+
+	// Validate required inputs so a missing token/url returns 400, not a 500.
+	if ssoMfaRequest.Token == "" || len(strings.Split(ssoMfaRequest.Url, ".")) < 2 {
+		ssoMfaResponse.Code = 400
+		ssoMfaResponse.Message = "token and a valid url (domain) are required"
+		ssoMfaResponse.Status = "error"
+		c.JSON(http.StatusBadRequest, ssoMfaResponse)
 		return
 	}
 
@@ -1695,16 +1727,25 @@ func (h *LoginHandler) OrgLogin(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&orgLoginRequest); err != nil {
 		log.Default().Println("Error:", err)
-		orgLoginResponse.Code = 500
-		orgLoginResponse.Message = "Error"
+		orgLoginResponse.Code = 400
+		orgLoginResponse.Message = "Invalid request body"
 		orgLoginResponse.Status = "error"
 
-		c.JSON(http.StatusInternalServerError, orgLoginResponse)
+		c.JSON(http.StatusBadRequest, orgLoginResponse)
 		return
 	}
 
 	var user models.User
 	orgLoginRequest.Username = strings.ToLower(orgLoginRequest.Username)
+
+	// Require a username so an empty body returns 400 rather than a 500.
+	if orgLoginRequest.Username == "" {
+		orgLoginResponse.Code = 400
+		orgLoginResponse.Message = "username is required"
+		orgLoginResponse.Status = "error"
+		c.JSON(http.StatusBadRequest, orgLoginResponse)
+		return
+	}
 
 	dbconn := db.GetConnectiontoDatabaseDynamically(os.Getenv("DB_NAME"))
 
