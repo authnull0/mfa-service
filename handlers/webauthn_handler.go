@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -849,7 +850,12 @@ func (h *WebAuthnHandler) GetMFAStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: " + err.Error()})
 		return
 	}
-	orgname := strings.Split(req.Url, ".")[1]
+	// Prefer ORG_NAME (on-prem single org); host-split breaks for the superadmin
+	// admin host (ram.org...) whose 2nd label is not the org name.
+	orgname := os.Getenv("ORG_NAME")
+	if orgname == "" {
+		orgname = strings.Split(req.Url, ".")[1]
+	}
 	tenantname := strings.Split(req.Url, ".")[0]
 	log.Printf("Getting MFA status for email: %s, Org: %s", req.Email, orgname)
 
@@ -977,7 +983,12 @@ func (h *WebAuthnHandler) VerifyUser(c *gin.Context) {
 	// 	return
 	// }
 
-	orgname := strings.Split(req.Url, ".")[1]
+	// Prefer ORG_NAME (on-prem single org); host-split breaks for the superadmin
+	// admin host (ram.org...) whose 2nd label is not the org name.
+	orgname := os.Getenv("ORG_NAME")
+	if orgname == "" {
+		orgname = strings.Split(req.Url, ".")[1]
+	}
 	tenantname := strings.Split(req.Url, ".")[0]
 
 	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
