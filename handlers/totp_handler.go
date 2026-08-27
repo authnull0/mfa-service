@@ -51,7 +51,10 @@ func (h *TOTPHandler) BeginTOTPSetup(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid request"})
 		return
 	}
-	orgname := strings.Split(req.Url, ".")[1]
+	orgname := os.Getenv("ORG_NAME")
+	if orgname == "" {
+		orgname = strings.Split(req.Url, ".")[1]
+	}
 	tenantname := strings.Split(req.Url, ".")[0]
 	log.Default().Printf("Parsed orgname: %s, tenantname: %s", orgname, tenantname)
 	log.Printf("Starting TOTP setup for email: %s, tenant: %s", req.Email, orgname)
@@ -123,7 +126,10 @@ func (h *TOTPHandler) ConfirmTOTPSetup(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid request"})
 		return
 	}
-	orgname := strings.Split(req.Url, ".")[1]
+	orgname := os.Getenv("ORG_NAME")
+	if orgname == "" {
+		orgname = strings.Split(req.Url, ".")[1]
+	}
 	tenantname := strings.Split(req.Url, ".")[0]
 	log.Printf("Confirming TOTP setup for email: %s, tenant: %s", req.Email, orgname)
 	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
@@ -290,7 +296,10 @@ func (h *TOTPHandler) VerifyTOTP(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid request"})
 		return
 	}
-	orgname := strings.Split(req.Url, ".")[1]
+	orgname := os.Getenv("ORG_NAME")
+	if orgname == "" {
+		orgname = strings.Split(req.Url, ".")[1]
+	}
 	tenantname := strings.Split(req.Url, ".")[0]
 	log.Printf("Verifying TOTP setup for email: %s, tenant: %s", req.Email, orgname)
 	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
