@@ -45,8 +45,8 @@ func (h *DecentralizedHandler) BeginRegisterWallet(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid request"})
 		return
 	}
-	orgname := strings.Split(req.Url, ".")[1]
-	tenantname := strings.Split(req.Url, ".")[0]
+	orgname := resolveOrg(req.Url)
+	tenantname := resolveTenant(req.Url)
 	tenantDB, err := config.ConnectTenantDB(orgname)
 	if err != nil {
 		log.Printf("Failed to connect to tenant database: %v", err)

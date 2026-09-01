@@ -51,11 +51,8 @@ func (h *TOTPHandler) BeginTOTPSetup(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid request"})
 		return
 	}
-	orgname := os.Getenv("ORG_NAME")
-	if orgname == "" {
-		orgname = strings.Split(req.Url, ".")[1]
-	}
-	tenantname := strings.Split(req.Url, ".")[0]
+	orgname := resolveOrg(req.Url)
+	tenantname := resolveTenant(req.Url)
 	log.Default().Printf("Parsed orgname: %s, tenantname: %s", orgname, tenantname)
 	log.Printf("Starting TOTP setup for email: %s, tenant: %s", req.Email, orgname)
 	// tenantDB, err := config.ConnectTenantDB(orgname)
@@ -126,11 +123,8 @@ func (h *TOTPHandler) ConfirmTOTPSetup(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid request"})
 		return
 	}
-	orgname := os.Getenv("ORG_NAME")
-	if orgname == "" {
-		orgname = strings.Split(req.Url, ".")[1]
-	}
-	tenantname := strings.Split(req.Url, ".")[0]
+	orgname := resolveOrg(req.Url)
+	tenantname := resolveTenant(req.Url)
 	log.Printf("Confirming TOTP setup for email: %s, tenant: %s", req.Email, orgname)
 	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
 	if tenantDB == nil {
@@ -296,11 +290,8 @@ func (h *TOTPHandler) VerifyTOTP(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid request"})
 		return
 	}
-	orgname := os.Getenv("ORG_NAME")
-	if orgname == "" {
-		orgname = strings.Split(req.Url, ".")[1]
-	}
-	tenantname := strings.Split(req.Url, ".")[0]
+	orgname := resolveOrg(req.Url)
+	tenantname := resolveTenant(req.Url)
 	log.Printf("Verifying TOTP setup for email: %s, tenant: %s", req.Email, orgname)
 	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
 	if tenantDB == nil {

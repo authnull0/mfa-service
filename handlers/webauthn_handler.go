@@ -8,9 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -850,13 +848,10 @@ func (h *WebAuthnHandler) GetMFAStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: " + err.Error()})
 		return
 	}
-	// Prefer ORG_NAME (on-prem single org); host-split breaks for the superadmin
-	// admin host (ram.org...) whose 2nd label is not the org name.
-	orgname := os.Getenv("ORG_NAME")
-	if orgname == "" {
-		orgname = strings.Split(req.Url, ".")[1]
-	}
-	tenantname := strings.Split(req.Url, ".")[0]
+	// Resolve org/tenant from config first (works on a bare IP / localhost);
+	// falls back to host parsing for multi-tenant SaaS hosts.
+	orgname := resolveOrg(req.Url)
+	tenantname := resolveTenant(req.Url)
 	log.Printf("Getting MFA status for email: %s, Org: %s", req.Email, orgname)
 
 	// Get client from database
@@ -983,13 +978,10 @@ func (h *WebAuthnHandler) VerifyUser(c *gin.Context) {
 	// 	return
 	// }
 
-	// Prefer ORG_NAME (on-prem single org); host-split breaks for the superadmin
-	// admin host (ram.org...) whose 2nd label is not the org name.
-	orgname := os.Getenv("ORG_NAME")
-	if orgname == "" {
-		orgname = strings.Split(req.Url, ".")[1]
-	}
-	tenantname := strings.Split(req.Url, ".")[0]
+	// Resolve org/tenant from config first (works on a bare IP / localhost);
+	// falls back to host parsing for multi-tenant SaaS hosts.
+	orgname := resolveOrg(req.Url)
+	tenantname := resolveTenant(req.Url)
 
 	tenantDB := db.GetConnectiontoDatabaseDynamically(orgname)
 	if tenantDB == nil {

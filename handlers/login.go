@@ -279,7 +279,7 @@ func (h *LoginHandler) HandleNormalLogin(c *gin.Context) {
 
 	//drim the url
 
-	orgname := strings.Split(normalLoginRequest.Url, ".")[1]
+	orgname := resolveOrg(normalLoginRequest.Url)
 
 	db1 := db.GetConnectiontoDatabaseDynamically(orgname)
 
@@ -680,8 +680,8 @@ func (h *LoginHandler) HandleSamlResponse(c *gin.Context) {
 		return
 	}
 
-	tenantName := strings.Split(audience, ".")[0]
-	orgName := strings.Split(audience, ".")[1]
+	tenantName := resolveTenant(audience)
+	orgName := resolveOrg(audience)
 	log.Default().Println("Organization Name: ", orgName)
 	log.Default().Printf("Tenant Name : %s", tenantName)
 	db := db.GetConnectiontoDatabaseDynamically(orgName)
@@ -956,8 +956,8 @@ func (h *LoginHandler) BackToLogin(c *gin.Context) {
 	log.Default().Printf("Token: %s", token)
 	log.Default().Printf("Tenant URL: %s", tenantUrl)
 
-	tenantName := strings.Split(tenantUrl, ".")[0]
-	orgName := strings.Split(tenantUrl, ".")[1]
+	tenantName := resolveTenant(tenantUrl)
+	orgName := resolveOrg(tenantUrl)
 
 	log.Default().Printf("Organization Name: %s", orgName)
 	log.Default().Printf("Tenant Name: %s", tenantName)
@@ -1182,7 +1182,7 @@ func (h *LoginHandler) SsoMfa(c *gin.Context) {
 
 	//get db name from url
 
-	dbname := strings.Split(ssoMfaRequest.Url, ".")[1]
+	dbname := resolveOrg(ssoMfaRequest.Url)
 
 	db1 := db.GetConnectiontoDatabaseDynamically(dbname)
 
