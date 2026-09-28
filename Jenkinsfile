@@ -4,7 +4,7 @@ pipeline {
     environment {
         GITHUB_REPO = 'https://github.com/authnull0/mfa-service.git'
         GITHUB_BRANCH = 'onprem'
-        PUBLIC_TAG  = '2.0.0-onprem'
+        PUBLIC_TAG  = 'onprem'
         DOCKER_REGISTRY_PUBLIC= 'docker-repo-public.authnull.com'
         DOCKER_PUBLIC_CREDENTIALS = credentials('docker-repo-public')
         DOCKER_IMAGE_PUBLIC = "docker-repo-public.authnull.com/mfa-service:${PUBLIC_TAG}"
